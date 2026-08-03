@@ -85,3 +85,17 @@ def test_capture_fills_game_from_title(tmp_path):
 
     d = manifest.diagnose(game, m, store=store)
     assert ("Data/Scripts.rxdata", "My Mod") in d.known
+
+
+def test_bundled_manifest_not_foreign(tmp_path):
+    """동봉 manifest.json은 foreign이 아니어야 한다."""
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    m = manifest.capture(game, game="Old Game")
+
+    # 매니페스트를 게임 폴더에 저장
+    manifest.save(m, game / "manifest.json")
+
+    # 재진단하면 foreign이 비어 있어야 한다
+    d = manifest.diagnose(game, m)
+    assert "manifest.json" not in d.foreign

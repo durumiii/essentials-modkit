@@ -12,7 +12,7 @@ from pathlib import Path
 
 DEFAULT_EXCLUDE = (
     "Saves/*", "*.sav", "LastSave.dat", "*.ini.bak", "screenshot*",
-    "_quarantine/*", "modkit-log.jsonl",
+    "_quarantine/*", "modkit-log.jsonl", "manifest.json",
 )
 BACKUP_SUFFIXES = (".orig",)
 
