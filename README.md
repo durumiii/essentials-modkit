@@ -1,4 +1,4 @@
-# modkit
+# essentials-modkit
 
 RPG Maker 기반 Essentials 팬게임(포켓몬 Z, Wishing Star 등)의 모드를 표준 카드
 (`mod.json`) 한 장으로 다루는 도구다. 모드를 얹고 빼고, 설치본이 깨끗한지
