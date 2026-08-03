@@ -22,7 +22,7 @@ BUILD = (
     'uv run --no-project --python 3.13 '
     '--with pyinstaller --with pywebview --with rubymarshal '
     'pyinstaller --onefile --windowed --name modkit '
-    '--add-data "web;web" app.py'
+    '--add-data "web;web" --add-data "modkit/templates;modkit/templates" app.py'
 )
 
 

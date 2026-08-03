@@ -1,13 +1,132 @@
-"""명령줄 진입점 — manifest/diagnose/harvest/apply/remove/shelf.
+"""명령줄 진입점 — new/lint/manifest/diagnose/harvest/apply/remove/shelf.
 
 각 핸들러는 코어 함수(manifest·modstore)를 부르고 사람이 읽을 몇 줄을 찍는다.
 종료 코드: 성공 0, 차단·오류 1, 진단에서 외래 발견 2.
 """
 import argparse
+import json
+import shutil
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import declare, manifest, modstore
+
+# onefile exe에서는 소스가 아니라 풀린 임시 폴더(_MEIPASS)에 놓인다.
+# --add-data "modkit/templates;modkit/templates"로 구우므로 얼린 상태에서는
+# _MEIPASS 바로 아래 modkit/templates, 안 얼렸으면 이 파일 옆 templates.
+def _templates_dir() -> Path:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass) / "modkit" / "templates"
+    return Path(__file__).parent / "templates"
+
+
+def _escapes(rel: str) -> bool:
+    p = PurePosixPath(rel)
+    return p.is_absolute() or ".." in p.parts
+
+
+def _cmd_new(args) -> int:
+    target = args.dir / args.name
+    if target.exists():
+        print(f"이미 있어요: {target}", file=sys.stderr)
+        return 1
+    target.mkdir(parents=True)
+
+    card = {
+        "name": args.name,
+        "game": args.game or "",
+        "description": "",
+        "scripts": [{"file": "001_Main.rb", "script_name": "001_Main.rb"}],
+    }
+    (target / "mod.json").write_text(
+        json.dumps(card, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    with open(target / "001_Main.rb", "w", encoding="utf-8", newline="") as f:
+        f.write(f"# {args.name} — 여기서부터 쓴다\r\n")
+
+    templates = _templates_dir()
+    for fname in ("AGENTS.md", "CLAUDE.md"):
+        shutil.copy2(templates / fname, target / fname)
+
+    print(f"모드 뼈대: {target}")
+    print("다음: 스크립트를 쓰고 mod.json을 채운 뒤 `modkit lint <폴더>`")
+    return 0
+
+
+def _cmd_lint(args) -> int:
+    folder = args.mod_dir
+    card_path = folder / "mod.json"
+    if not card_path.is_file():
+        print("오류 · mod.json — 파일이 없어요 — modkit new로 뼈대를 만들거나 mod.json을 추가해요")
+        print("오류 1 · 권장 0")
+        return 1
+    try:
+        card = json.loads(card_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        print(f"오류 · mod.json — JSON을 읽을 수 없어요 ({e}) — 문법을 고쳐요")
+        print("오류 1 · 권장 0")
+        return 1
+
+    errors = []
+    warnings = []
+
+    name = card.get("name")
+    if not name:
+        errors.append("오류 · mod.json:name — 값이 비어 있어요 — 모드 이름을 적어요")
+
+    if not card.get("game"):
+        warnings.append("권장 · mod.json:game — 비어 있어요 — 다른 게임 오설치를 못 막아요")
+    if not card.get("description"):
+        warnings.append("권장 · mod.json:description — 비어 있어요 — 유저 서랍에 설명이 안 떠요")
+
+    scripts = card.get("scripts")
+    if scripts is None:
+        errors.append("오류 · mod.json:scripts — 키가 없어요 — scripts를 배열로 추가해요(빈 배열도 가능)")
+        scripts = []
+    elif scripts and not card.get("touches"):
+        warnings.append("권장 · mod.json:touches — 없어요 — 겹침 경고를 못 받아요")
+
+    seen_names = set()
+    for i, s in enumerate(scripts):
+        file = s.get("file")
+        if file:
+            if _escapes(file):
+                errors.append(f"오류 · mod.json:scripts[{i}].file — 폴더를 벗어나요 — 모드 폴더 안 상대경로만 써요")
+            elif not (folder / file).is_file():
+                errors.append(f"오류 · mod.json:scripts[{i}].file — {folder / file}에 없어요 — 파일을 폴더 안에 두거나 경로를 고쳐요")
+        sname = s.get("script_name")
+        if sname:
+            if sname in seen_names:
+                errors.append(f"오류 · mod.json:scripts[{i}].script_name — '{sname}' 중복이에요 — 이름을 다르게 해요")
+            seen_names.add(sname)
+
+    for i, a in enumerate(card.get("assets") or []):
+        file = a.get("file")
+        if file:
+            if _escapes(file):
+                errors.append(f"오류 · mod.json:assets[{i}].file — 폴더를 벗어나요 — 모드 폴더 안 상대경로만 써요")
+            elif not (folder / file).is_file():
+                errors.append(f"오류 · mod.json:assets[{i}].file — {folder / file}에 없어요 — 파일을 폴더 안에 두거나 경로를 고쳐요")
+        install_to = a.get("install_to")
+        if install_to and _escapes(install_to):
+            errors.append(f"오류 · mod.json:assets[{i}].install_to — 절대경로거나 상위로 나가요 — 게임 폴더 기준 상대경로만 써요")
+
+    order = card.get("order") or {}
+    if name and name in (card.get("requires") or []):
+        warnings.append("권장 · mod.json:requires — 자기 이름이 들어 있어요 — 스스로를 가리킬 필요 없어요")
+    if name and name in (order.get("after") or []):
+        warnings.append("권장 · mod.json:order.after — 자기 이름이 들어 있어요 — 스스로를 가리킬 필요 없어요")
+    if name and name in (order.get("before") or []):
+        warnings.append("권장 · mod.json:order.before — 자기 이름이 들어 있어요 — 스스로를 가리킬 필요 없어요")
+
+    for line in errors + warnings:
+        print(line)
+    if errors:
+        print(f"오류 {len(errors)} · 권장 {len(warnings)}")
+        return 1
+    print(f"괜찮아요 — 오류 0 · 권장 {len(warnings)}")
+    return 0
 
 
 def _cmd_manifest(args) -> int:
@@ -87,6 +206,16 @@ def _cmd_shelf(args) -> int:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="modkit")
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("new", help="모드 뼈대 생성")
+    p.add_argument("name")
+    p.add_argument("--game", help="대상 게임 제목")
+    p.add_argument("--dir", type=Path, default=Path("."))
+    p.set_defaults(func=_cmd_new)
+
+    p = sub.add_parser("lint", help="mod.json·스크립트·에셋 검사")
+    p.add_argument("mod_dir", type=Path)
+    p.set_defaults(func=_cmd_lint)
 
     p = sub.add_parser("manifest")
     p.add_argument("game_dir", type=Path)
