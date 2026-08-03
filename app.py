@@ -33,6 +33,17 @@ class Api:
         path = picked[0] if picked else None
         return {"ok": bool(path), "path": path or ""}
 
+    def pick_zip(self) -> dict:
+        """드래그앤드롭이 실경로를 못 주는 pywebview 한계의 폴백 — 파일 선택 대화상자."""
+        if self._window is None:
+            return {"ok": False, "error": "no-window"}
+        import webview  # 지연 임포트 — 창 없는 환경(테스트)에서는 안 닿는다
+
+        picked = self._window.create_file_dialog(
+            webview.OPEN_DIALOG, file_types=("Zip 파일 (*.zip)",))
+        path = picked[0] if picked else None
+        return {"ok": bool(path), "path": path or ""}
+
     def recent(self) -> dict:
         try:
             if not self.state_path.is_file():
@@ -196,7 +207,9 @@ def main(argv=None) -> int:
     store_dir = Path(os.environ.get("MODKIT_STORE", modstore.DEFAULT_STORE))
     state_path = Path.home() / ".modkit" / "state.json"
     api = Api(store_dir, state_path)
-    window = webview.create_window("modkit", "modkit/web/index.html", js_api=api)
+    window = webview.create_window(
+        "modkit — 모드 관리자", "modkit/web/index.html", js_api=api,
+        width=780, height=680, min_size=(560, 480))
     api.set_window(window)
     webview.start()
     return 0

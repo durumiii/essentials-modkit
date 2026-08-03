@@ -1,0 +1,262 @@
+<!doctype html><html lang=ko><head><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1">
+<title>modkit</title>
+<style>
+ :root{--bg:#16171b;--panel:#1e2026;--card:#23252c;--line:#32343d;--tx:#e6e7ea;--sub:#9a9ca6;
+   --acc:#5b8def;--acc2:#3d68c4;--ok:#4cc38a;--warn:#e5a54b;--err:#e5644b}
+ *{box-sizing:border-box}
+ body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);
+   color:var(--tx);min-height:100vh}
+ header{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 28px;
+   font-weight:700;font-size:17px;letter-spacing:.3px}
+ header b{color:var(--acc)}
+ main{max-width:720px;margin:0 auto;padding:28px}
+ .screen{display:none}
+ .screen.active{display:block}
+ .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
+ .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+   margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+ h2{margin:0 0 14px;font-size:16px}
+ p.sub{color:var(--sub);font-size:13.5px;margin:0 0 16px}
+ button{font-family:inherit;font-size:14.5px;color:var(--tx);background:var(--card);
+   border:1px solid var(--line);border-radius:10px;padding:11px 18px;cursor:pointer}
+ button:hover{background:#2c2e37}
+ button.primary{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
+ button.primary:hover{background:var(--acc2)}
+ button.danger{border-color:var(--err);color:var(--err)}
+ button.big{width:100%;padding:16px;font-size:15.5px;margin-bottom:10px}
+ button:disabled{opacity:.5;cursor:default}
+ .row{display:flex;gap:10px;flex-wrap:wrap}
+ .light{display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:700;
+   padding:14px 18px;border-radius:12px;margin-bottom:16px}
+ .light.ok{background:rgba(76,195,138,.14);color:var(--ok)}
+ .light.warn{background:rgba(229,165,75,.14);color:var(--warn)}
+ .light.err{background:rgba(229,100,75,.14);color:var(--err)}
+ .dot{width:12px;height:12px;border-radius:50%;background:currentColor}
+ .foreign-list{max-height:160px;overflow:auto;font-size:13px;color:var(--sub);
+   background:var(--card);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-bottom:16px}
+ .banner{background:rgba(229,165,75,.14);border:1px solid rgba(229,165,75,.35);color:var(--warn);
+   border-radius:10px;padding:12px 16px;margin-bottom:16px;font-size:13.5px}
+ .drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center;
+   color:var(--sub);margin-bottom:16px}
+ .drop.over{border-color:var(--acc);color:var(--acc)}
+ #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);
+   border:1px solid var(--warn);color:var(--warn);padding:12px 20px;border-radius:10px;
+   font-size:13.5px;display:none;max-width:80%;z-index:20}
+ .name{font-weight:600}
+ .desc{color:var(--sub);font-size:12.5px}
+</style></head>
+<body>
+<header><b>modkit</b> — 모드 관리자</header>
+<main>
+
+<section id=s-folder class="screen active">
+  <div class=panel>
+    <h2>게임 폴더</h2>
+    <p class=sub>모드를 관리할 게임 폴더를 골라 주세요.</p>
+    <button class="big primary" onclick="pickFolder()">폴더 선택</button>
+    <div id=recent-list></div>
+  </div>
+</section>
+
+<section id=s-diagnose class="screen">
+  <div class=panel>
+    <h2>폴더 진단</h2>
+    <div id=diag-light></div>
+    <div id=diag-banner></div>
+    <div id=diag-foreign class=foreign-list style="display:none"></div>
+    <div class=row>
+      <button class=primary onclick="quarantineAndContinue()">격리 후 계속</button>
+      <button onclick="skipDiagnose()">그냥 계속</button>
+      <button onclick="showScreen('s-folder')">돌아가기</button>
+    </div>
+  </div>
+</section>
+
+<section id=s-mods class="screen">
+  <div class=panel>
+    <h2>모드 서랍</h2>
+    <div id=mods-banner></div>
+    <div class=drop id=dropzone>
+      zip 파일을 여기로 끌어다 놓거나
+      <button onclick="pickZip()">파일 선택</button>
+    </div>
+    <div id=mods-list></div>
+    <button onclick="showScreen('s-folder')">폴더 바꾸기</button>
+  </div>
+</section>
+
+</main>
+<div id=toast></div>
+
+<script>
+let currentPath = "";
+
+function showScreen(id) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.display = "block";
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { el.style.display = "none"; }, 4000);
+}
+
+function api() { return window.pywebview.api; }
+
+window.addEventListener("pywebviewready", () => {
+  loadRecent();
+});
+
+function loadRecent() {
+  api().recent().then(r => {
+    const box = document.getElementById("recent-list");
+    box.innerHTML = "";
+    if (!r.ok || !r.paths.length) return;
+    const label = document.createElement("p");
+    label.className = "sub";
+    label.textContent = "최근 사용한 폴더";
+    box.appendChild(label);
+    r.paths.forEach(p => {
+      const b = document.createElement("button");
+      b.className = "big";
+      b.textContent = p;
+      b.onclick = () => openFolder(p);
+      box.appendChild(b);
+    });
+  });
+}
+
+function pickFolder() {
+  api().pick_folder().then(r => {
+    if (r.ok) openFolder(r.path);
+  });
+}
+
+function openFolder(path) {
+  currentPath = path;
+  api().remember(path).then(() => {
+    api().game_status(path).then(status => {
+      if (!status.ok) { toast("폴더를 읽지 못했어요 — " + status.error); return; }
+      if (status.has_manifest) {
+        runDiagnose();
+      } else {
+        showModsScreen("매니페스트가 없는 폴더예요 — 진단 없이 모드만 관리해요.");
+      }
+    });
+  });
+}
+
+function runDiagnose() {
+  api().diagnose(currentPath).then(d => {
+    if (!d.ok) { showModsScreen("진단 실패 — " + d.error); return; }
+    showScreen("s-diagnose");
+    const light = document.getElementById("diag-light");
+    const foreignBox = document.getElementById("diag-foreign");
+    document.getElementById("diag-banner").innerHTML = "";
+    if (d.foreign.length) {
+      light.innerHTML = `<div class="light warn"><span class=dot></span>외래 파일 ${d.foreign.length}개가 있어요</div>`;
+      foreignBox.style.display = "block";
+      foreignBox.textContent = d.foreign.join(", ");
+    } else if (d.missing.length) {
+      light.innerHTML = `<div class="light warn"><span class=dot></span>빠진 파일 ${d.missing.length}개가 있어요</div>`;
+      foreignBox.style.display = "none";
+    } else {
+      light.innerHTML = `<div class="light ok"><span class=dot></span>깨끗해요 — 손댄 흔적이 없어요</div>`;
+      foreignBox.style.display = "none";
+    }
+  });
+}
+
+function quarantineAndContinue() {
+  api().quarantine_foreign(currentPath).then(r => {
+    if (!r.ok) { toast("격리 실패 — " + r.error); return; }
+    if (r.moved) toast(`외래 파일 ${r.moved}개를 _quarantine 폴더로 옮겼어요.`);
+    showModsScreen();
+  });
+}
+
+function skipDiagnose() { showModsScreen(); }
+
+function showModsScreen(banner) {
+  showScreen("s-mods");
+  document.getElementById("mods-banner").innerHTML = banner
+    ? `<div class=banner>${banner}</div>` : "";
+  loadMods();
+}
+
+function loadMods() {
+  api().mods(currentPath).then(r => {
+    const box = document.getElementById("mods-list");
+    box.innerHTML = "";
+    if (!r.ok) { toast("모드 목록을 못 읽었어요 — " + r.error); return; }
+    r.available.forEach(mod => {
+      const card = document.createElement("div");
+      card.className = "card";
+      const info = document.createElement("div");
+      info.innerHTML = `<div class=name>${mod.name}</div><div class=desc>${mod.description || ""}</div>`;
+      const btn = document.createElement("button");
+      if (mod.installed) {
+        btn.textContent = "빼기";
+        btn.className = "danger";
+        btn.onclick = () => removeMod(mod.name);
+      } else {
+        btn.textContent = "얹기";
+        btn.className = "primary";
+        btn.onclick = () => applyMod(mod.name);
+      }
+      card.appendChild(info);
+      card.appendChild(btn);
+      box.appendChild(card);
+    });
+  });
+}
+
+function applyMod(name) {
+  api().apply_mod(currentPath, name).then(r => {
+    if (!r.ok) {
+      if (r.blocked) toast("얹을 수 없어요 — " + r.blocked.join(", "));
+      else toast("얹기 실패 — " + r.error);
+      return;
+    }
+    if (r.warnings && r.warnings.length) toast(r.warnings.join(" / "));
+    loadMods();
+  });
+}
+
+function removeMod(name) {
+  api().remove_mod(currentPath, name).then(r => {
+    if (!r.ok) { toast("빼기 실패 — " + r.error); return; }
+    loadMods();
+  });
+}
+
+function importZip(path) {
+  api().import_zip(path).then(r => {
+    if (!r.ok) { toast("zip 반입 실패 — " + r.error); return; }
+    toast(`"${r.name}" 모드를 서랍에 넣었어요.`);
+    loadMods();
+  });
+}
+
+function pickZip() {
+  api().pick_zip().then(r => {
+    if (r.ok) importZip(r.path);
+  });
+}
+
+// pywebview는 드롭된 File 객체의 실경로를 못 준다 — 드롭 존은 안내용이고
+// 실제 반입은 파일 선택 버튼(pick_zip)으로 처리한다.
+const dropzone = document.getElementById("dropzone");
+dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("over"); });
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
+dropzone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropzone.classList.remove("over");
+  toast("드래그앤드롭 경로는 못 읽어요 — 아래 '파일 선택' 버튼을 써 주세요.");
+});
+</script>
+</body></html>
