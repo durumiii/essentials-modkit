@@ -1,5 +1,7 @@
 # 공개 안내문 초안 (2026-08-03)
 
+공개 완료(2026-08-04): https://github.com/durumiii/essentials-modkit · 릴리스 v0.1.0(exe 자산 포함)
+
 repo 공개(`gh repo create`)와 갤러리 게시는 사용자 결정 게이트다. 이 문서는
 그 시점에 바로 쓸 수 있는 텍스트 초안만 담는다 — 실제 게시는 하지 않았다.
 
