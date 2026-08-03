@@ -223,7 +223,7 @@ def main(argv=None) -> int:
     state_path = Path.home() / ".modkit" / "state.json"
     api = Api(store_dir, state_path)
     window = webview.create_window(
-        "modkit — 모드 관리자", str(index), js_api=api,
+        "modkit — Essentials 팬게임 모드 관리자", str(index), js_api=api,
         width=780, height=680, min_size=(560, 480))
     api.set_window(window)
     webview.start()
