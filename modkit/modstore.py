@@ -693,10 +693,17 @@ def _write(bundle: Path, entries: list) -> None:
 
     상류 기록기가 아니라 `rubywrite`를 쓴다 — 상류는 문자열에 번호를 안 매겨 가리킴이
     어긋나고, 그러면 다른 플러그인의 이름 자리가 엉뚱한 값으로 바뀐다(`rubywrite` 참고).
+    쓰기 전에 되읽어 항목 수와 이름을 대조한다 — 주입형과 같은 방어다.
     """
     from . import rubywrite
 
-    _put(bundle, rubywrite.dumps(entries))
+    payload = rubywrite.dumps(entries)
+    again = rubyread.loads(payload)
+    if not isinstance(again, list) or len(again) != len(entries) or any(
+        str(a[0]) != str(b[0]) for a, b in zip(again, entries)
+    ):
+        raise NoBundle("왕복 확인이 어긋났어요 — 묶음을 건드리지 않았어요")
+    _put(bundle, payload)
 
 
 def _put(target: Path, blob: bytes) -> None:
