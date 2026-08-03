@@ -37,6 +37,11 @@ UTF-8로 바꿔 한글 CLI 출력이 그대로 보인다. 이 경로는 exe로 �
 
 빌드 한 번에 성공했고 걸린 시간은 31초, 산출물은 13.7 MiB짜리 `dist/modkit.exe`
 (sha256 `fa5ab2851d32a39d42893be3917005e5bdff482c7bfe2ab9ec5eb07631f01c2a`).
+매니페스트 scope 도입으로 `app.py`·`web/index.html`이 바뀌어 같은 날 다시 구웠다 —
+크기는 13.7 MiB(14,388,668 바이트) 그대로고 sha256만
+`2544c2287b3a2c1bee9c6d69d7b9ed28b8b595c38e7be7b54badd1cfcb198eb8`로 바뀌었다.
+CLI 스모크(`shelf --store <빈 폴더>`)는 재빌드본에서도 `보관소가 비어 있어요.` ·
+종료 코드 0이었다.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
