@@ -123,9 +123,13 @@ class NameTaken(Exception):
     """그 이름을 쓰는 모드가 이미 있다."""
 
 
-def apply(store: Path | str, name: str, game_dir: Path | str) -> dict:
-    """보관소의 모드를 설치본에 얹는다. 같은 이름이 있으면 갈아 끼운다."""
-    from . import gameinfo
+def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = False) -> dict:
+    """보관소의 모드를 설치본에 얹는다. 같은 이름이 있으면 갈아 끼운다.
+
+    얹기 전에 제작자 선언을 본다(`declare`) — requires·conflicts는 막고, order는 삽입
+    자리를 정하고, touches 겹침은 경고로 돌려준다. `force=True`면 막을 일도 경고로 내린다.
+    """
+    from . import declare, gameinfo
 
     mod = read_mod(store, name)
     game_dir = Path(game_dir)
@@ -136,6 +140,21 @@ def apply(store: Path | str, name: str, game_dir: Path | str) -> dict:
             f"`{mod.name}`은(는) `{mod.game}` 전용 모드예요. 이 게임은 `{here}`입니다.\n"
             "클래스 이름이 같아도 다른 게임에서는 다른 것을 가리킬 수 있어요."
         )
+
+    card = json.loads((mod.folder / CARD).read_text(encoding="utf-8"))
+    try:
+        already = installed(game_dir)
+    except NoBundle:
+        already = []  # 아직 아무것도 없는 설치본 — 견줄 상대가 없다
+    others = [one for one in already if one != mod.name]
+    warnings = []
+    try:
+        warnings = declare.gate(card, others, store)
+    except declare.Blocked as no:
+        if not force:
+            raise
+        warnings = [f"강행: {why}" for why in no.reasons]
+
     if not mod.scripts:
         # 스크립트 없이 파일만 갈아 끼우는 모드 — 플러그인 묶음이 없는 게임(포켓몬 Z처럼
         # 옛 엔진)에도 얹을 수 있어야 하므로 묶음은 아예 건드리지 않는다.
@@ -147,18 +166,36 @@ def apply(store: Path | str, name: str, game_dir: Path | str) -> dict:
             "total": 0,
             "backup": "",
             "assets": len(brought["written"]) + len(brought["skipped"]),
+            "warnings": warnings,
         }
 
     if not (game_dir / BUNDLE).is_file():
         # 플러그인 묶음이 없는 옛 엔진(포켓몬 Z처럼)의 스크립트 모드는 주입형이다 —
         # Scripts.rxdata에 섹션으로 덧붙인다. 규약은 poke-essentials 주입기와 한 벌.
-        return _inject(mod, game_dir)
+        # 주입은 늘 Main 앞에 일괄로 들어가므로 자리를 골라 꽂지 않는다. 모드 사이의
+        # 상대 순서는 걷어내고 다시 꽂는 재적용으로 실현되니, 상대가 아직 없으면 알린다.
+        for need in (card.get("order") or {}).get("after") or []:
+            if need not in others:
+                warnings.append(
+                    f"`{need}`가 아직 없어서 `{mod.name}`이 앞에 놓여요 — "
+                    f"`{need}`를 얹은 뒤 `{mod.name}`을 다시 얹으면 순서가 잡혀요")
+        done = _inject(mod, game_dir)
+        done["warnings"] = warnings
+        return done
     entries = _read(game_dir / BUNDLE)
 
     packed = _pack_mod(mod)
     at = next((i for i, entry in enumerate(entries) if str(entry[0]) == mod.name), None)
     if at is None:
-        entries = entries + [packed]
+        # 묶음의 항목과 모드가 1:1이라 이름 리스트의 인덱스를 그대로 배열 자리로 쓴다.
+        try:
+            spot = declare.place(card, [str(entry[0]) for entry in entries])
+        except declare.Blocked as no:
+            if not force:
+                raise
+            warnings += [f"강행: {why}" for why in no.reasons]
+            spot = len(entries)
+        entries = entries[:spot] + [packed] + entries[spot:]
         did = "설치됨"
     else:
         entries = list(entries)
@@ -175,6 +212,7 @@ def apply(store: Path | str, name: str, game_dir: Path | str) -> dict:
         "total": len(entries),
         "backup": str(backup),
         "assets": len(brought["written"]) + len(brought["skipped"]),
+        "warnings": warnings,
     }
 
 
