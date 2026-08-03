@@ -11,16 +11,45 @@ def test_capture_and_roundtrip(tmp_path):
     from modkit import manifest
     game = make_core_game(tmp_path)
     (game / "Graphics").mkdir(); (game / "Graphics" / "a.png").write_bytes(b"png")
-    (game / "Saves").mkdir(); (game / "Saves" / "s1.rxdata").write_bytes(b"save")
+    (game / "Game.rxdata").write_bytes(b"save")
 
     m = manifest.capture(game, game="Old Game", version="v1")
     assert m["modkit_manifest"] == 1
     assert "Graphics/a.png" in m["files"]
     assert "Data/Scripts.rxdata" in m["files"]
-    assert not any(p.startswith("Saves/") for p in m["files"])  # 유저 데이터 제외
+    assert "Game.rxdata" not in m["files"]                      # 유저 데이터 제외
 
     manifest.save(m, tmp_path / "manifest.json")
     assert manifest.load(tmp_path / "manifest.json") == m
+
+
+def test_default_exclude_runtime_leftovers(tmp_path):
+    """3게임 실측 이름 그대로 — 세이브·OS 부산물·스크린샷은 지문에 안 들어간다."""
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    (game / "Graphics" / "Pictures").mkdir(parents=True)
+    leftovers = [
+        "Game.rxdata", "Game1.rxdata", "Game2.rxdata.bak",   # 세이브(WS 실물)
+        "Data/LastSave.dat",                                 # v16 상태 기록(Z 코드)
+        "Audio/desktop.ini",                                 # OS 부산물(WS·AR 실물)
+        "Thumbs.db", "Graphics/.DS_Store",
+        "[2026-08-04] 03_12_45.123.png",                     # v21 스크린샷
+        "capture000.bmp",                                    # v16 스크린샷(Z 실물)
+    ]
+    keep = ["Data/Game_Data.rxdata", "Graphics/Pictures/screenshot.png"]
+    for rel in leftovers + keep:
+        p = game / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(b"x")
+
+    m = manifest.capture(game, game="Old Game")
+    assert [r for r in leftovers if r in m["files"]] == []
+    assert all(r in m["files"] for r in keep)                 # 콘텐츠 오폭 없음
+
+    # *.bak은 제외가 아니라 backups 갈래 — 진단이 조용히 숨기지 않는다
+    d = manifest.diagnose(game, m)
+    assert "Game2.rxdata.bak" in d.backups
+    assert d.foreign == () and d.missing == ()
 
 
 def test_diagnose_four_verdicts(tmp_path):

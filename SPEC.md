@@ -125,9 +125,14 @@ design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서�
 
 매니페스트는 깨끗한 원본에서 `manifest.capture(game_dir)`로 뽑는 JSON 한 장이다.
 `{modkit_manifest: 1, game, version, exclude, files: {상대경로: [크기, CRC32]}}`
-꼴이며, `exclude`에 든 glob 패턴(세이브·설정·스크린샷 등 기본값
-`manifest.DEFAULT_EXCLUDE`)에 걸리는 파일과 `.orig`로 끝나는 파일은 애초에
-목록에 들어가지 않는다.
+꼴이며, `exclude`에 든 glob 패턴에 걸리는 파일과 `.orig`·`.bak`으로 끝나는
+파일은 애초에 목록에 들어가지 않는다. 기본값 `manifest.DEFAULT_EXCLUDE`는
+세 게임(Essentials v21·v21.1·v16) 대조 실측으로 고른 것이다 — 게임 폴더 뿌리에
+떨어지는 세이브(`Game*.rxdata`), v16의 `LastSave.dat`, 윈도·맥 탐색기가 남기는
+`desktop.ini`·`Thumbs.db`·`.DS_Store`, 두 세대의 스크린샷(v21은
+`[2026-08-04] 03_12_45.123.png` 꼴, v16은 `capture*.bmp`), 그리고 도구 자신의
+산물. 패턴은 상대경로 전체에 `fnmatch`로 걸리고 `*`가 `/`를 넘으므로, 하위
+폴더까지 잡으려면 `*/desktop.ini`처럼 따로 적어야 한다.
 
 매니페스트는 자기 목록이 설치본 전체인지 일부인지를 `scope`로 밝힌다. 깨끗한
 원본을 통째로 뜬 것은 `"full"`(기본값)이고, 패치 zip에 동봉하는 것처럼 스테이징
@@ -154,7 +159,9 @@ design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서�
 대상이 아니다. 목록에 있는 파일이 크기·CRC32에서 어긋나면 부분 매니페스트에서도
 그대로 외래다 — 옛 패치가 패치 파일을 덮은 자리를 놓치지 않는다.
 
-도구 자신이 남긴 `.orig` 백업은 이 네 판정과 별도로 `backups`에 선다. `store`를
+`.orig`·`.bak`으로 끝나는 백업은 이 네 판정과 별도로 `backups`에 선다. 도구가
+남긴 `.orig`뿐 아니라 엔진이 남긴 세이브 백업(`Game.rxdata.bak`)도 여기 온다 —
+조용히 제외하지 않고 눈에 보이게 세우는 편이 진단에 정직하다. `store`를
 안 주면(매니페스트만 있고 보관소가 없는 상황) 아는 변경 판정이 나오지 않는다 —
 카드가 없으니 무엇이 아는 변경인지 알 길이 없다.
 
