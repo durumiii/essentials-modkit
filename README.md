@@ -1,83 +1,74 @@
 # essentials-modkit
 
-RPG Maker 기반 Essentials 팬게임(포켓몬 Z, Wishing Star 등)의 모드를 표준 카드
-(`mod.json`) 한 장으로 다루는 도구다. 모드를 얹고 빼고, 설치본이 깨끗한지
-진단하고, 옛 패치의 흔적은 지우는 대신 격리한다. 규약 전문은
-[`SPEC.md`](SPEC.md)에 있다.
+RPG Maker 기반 Essentials 팬게임을 하다 보면 흔히 겪는 일이 있다. 예전에 깔아
+둔 패치 위에 새 패치를 덮었더니 게임이 이상해졌는데, 그 폴더에 뭐가 깔려
+있는지는 아무도 모른다. 이 도구는 그 문제를 풀려고 만들었다.
 
-## 유저 — 패치와 모드를 관리하고 싶다면
+모드를 "mod.json 카드가 붙은 폴더 하나"로 정의하고, 그 단위로 얹고 뺀다.
+설치본이 깨끗한지 진단할 수 있고, 정체불명 파일이 나와도 지우는 대신 격리해
+뒀다가 되돌린다. 포켓몬 Z 한글패치를 배포하면서 실제로 쓰고 있는 물건이고,
+규약 전체는 [SPEC.md](SPEC.md)에 적어 뒀다.
+
+## 유저라면
 
 [릴리스](https://github.com/durumiii/essentials-modkit/releases)에서
-`modkit.exe`를 받아 더블클릭하면 끝이다. 설치 과정은 없다. 창을 그리는 데
-Windows 10/11의 Edge WebView2 런타임이 필요한데, 윈도우 11에는 기본으로 들어
-있다(없으면 마이크로소프트 공식 페이지에서 받는다).
+modkit.exe를 받아 더블클릭하면 된다. 따로 설치할 것은 없다. 창이 안 뜨는
+드문 경우는 Edge WebView2 런타임이 없는 구형 윈도우 10인데, 마이크로소프트
+공식 페이지에서 받으면 해결된다. 윈도우 11에는 기본으로 들어 있다.
 
-화면은 세 걸음으로 흐른다. 게임 폴더를 고르면 진단이 돈다. 패치가 온전히
-깔렸는지, 옛 패치의 흔적이 남았는지를 신호등으로 보여준다. 그다음 모드
-서랍에서 보관소의 모드를 얹거나 빼거나, 모드 zip을 끌어다 보관소에 더한다.
+게임 폴더를 고르면 먼저 진단이 돈다. 패치가 온전히 깔렸는지, 옛 패치의
+흔적이 남아 있는지 보여주고, 흔적이 있으면 게임 폴더 안 `_quarantine`
+폴더로 옮겨 준다. 지우는 게 아니라서 언제든 통째로 되돌릴 수 있다.
 
-진단에서 정체불명 파일이 나와도 지우지 않는다. 게임 폴더 안
-`_quarantine/<날짜>/`로 옮겨 둘 뿐이라 언제든 통째로 되돌릴 수 있다. 진단은
-패치 배포판에 동봉된 `manifest.json`이 있어야 돌고(포켓몬 Z 한글패치 v5부터),
-파일이 많은 게임에서는 몇 분 걸린다.
+그다음이 모드 서랍이다. 보관소의 모드를 켜고 끄듯 얹고 빼고, 받아 둔 모드
+zip을 끌어다 넣는다. 서로 충돌하는 모드는 이유와 함께 막아 주고, 순서가
+중요한 모드는 알아서 맞는 자리에 놓는다.
 
-## 제작자 — 모드를 만들고 싶다면
+두 가지만 알아 두면 좋다. 진단은 패치 배포판에 manifest.json이 들어 있어야
+돈다(포켓몬 Z 한글패치는 v5부터 들어 있다). 파일이 많은 게임에서는 몇 분
+걸린다.
 
-만드는 순서는 이렇다.
+## 모드를 만든다면
 
 ```
-modkit new "내 모드" --game "게임 제목"   # 뼈대 생성
-(스크립트를 쓰고 mod.json을 채운다)
-modkit lint "내 모드"                     # 규약 검사 — 오류 0이 목표
-(폴더째 zip으로 묶으면 그게 배포본)
+modkit new "내 모드" --game "게임 제목"
 ```
 
-`new`가 만드는 폴더에는 카드 뼈대와 함께 작업 지침(`AGENTS.md`)이 들어
-있다. 카드의 필수 필드는 `name`과 `scripts`(에셋만 있는 모드는 빈 배열)이고,
-`game`을 적어 두면 다른 게임에 잘못 얹히는 사고를 도구가 막아 준다. 선택
-필드 `touches` · `order` · `requires` · `conflicts`는 여러 모드가 공존할 때의
-선언이다. 충돌하면 사유와 함께 막고, 순서는 알아서 배치한다. 겹치는 자리는
-유저에게 경고로 알린다. 필드 사전은 [`SPEC.md`](SPEC.md) 2절.
+이러면 카드 뼈대와 첫 스크립트가 든 폴더가 생긴다. 스크립트를 쓰고 카드를
+채운 뒤에
 
-`lint`는 두 층으로 알려 준다. 오류(규약 위반 — 이대로는 배포 불가)와 권장
-(비워 두면 유저가 손해 보는 것들 — 설명 없음, touches 선언 없음 따위).
+```
+modkit lint "내 모드"
+```
 
-설치 방식은 유저 쪽 도구가 설치본을 보고 알아서 고른다 — 묶음형
-(`PluginScripts.rxdata`), 주입형(`Scripts.rxdata` 섹션), 에셋형 셋 중
-하나다(SPEC.md 3절).
+를 돌려서 오류가 없으면, 폴더째 zip으로 묶는다. 그게 배포본이다. 유저 쪽
+설치는 modkit이 알아서 하니까 설치 안내문을 쓸 필요가 없다.
 
-### AI 에이전트로 만든다면
+카드에서 꼭 필요한 필드는 name과 scripts 둘이다. game을 적어 두면 다른
+게임에 잘못 얹히는 사고를 막는다. description은 유저의 모드 서랍에 그대로
+뜬다. touches, order, requires, conflicts는 여러 모드가 함께 깔릴
+때를 위한 선언인데, 자세한 건 [SPEC.md](SPEC.md) 2절을 보는 편이 빠르다.
 
-에이전트에게 이 저장소 주소를 주고 "이 규약대로"라고 하면 된다. 저장소 루트의
-[`llms.txt`](llms.txt)가 에이전트용 진입로이고, `new`가 심어 주는 `AGENTS.md`는
-작업 폴더 안에서 같은 역할을 한다. 에이전트의 종료 조건은 사람과 같다 —
-`modkit lint` 오류 0.
+lint는 잔소리를 두 단계로 한다. 규약 위반은 오류라서 고치기 전에는 배포하면
+안 되고, 권장 사항은 경고로만 알려 준다. 이를테면 설명을 비워 두면 "유저
+서랍에 설명이 안 떠요" 하고 일러 주는 식이다.
+
+### AI 에이전트에게 시킨다면
+
+에이전트에게 이 저장소 주소를 주면서 "이 규약대로 만들어 줘"라고 하면 된다.
+저장소 루트의 [llms.txt](llms.txt)가 에이전트용 안내문이고, new가 폴더에
+심어 주는 AGENTS.md도 같은 역할을 한다. 사람이든 에이전트든 끝나는 조건은
+같다. lint 오류 0.
 
 ## CLI
 
-GUI와 같은 exe(또는 `uv run app.py`)가 인자를 받으면 CLI가 된다:
-`new` · `lint` · `manifest` · `diagnose` · `harvest` · `apply` · `remove` ·
-`shelf`. 각 명령의 인자는 `--help`로 본다.
+GUI와 CLI는 같은 파일이다. modkit.exe에 인자를 주면(개발 중이라면
+`uv run app.py`) 명령줄 도구가 된다. 명령은 new, lint, manifest, diagnose,
+harvest, apply, remove, shelf가 있고 각각 `--help`가 달려 있다.
 
-## 검증
+## 믿어도 되나
 
-합성 픽스처만이 아니라 실제 게임 설치본으로 왕복·진단을 돌린 기록이
-[`docs/validation.md`](docs/validation.md)에 있다. 규약 문서(SPEC.md)의 각 절에는
-그 절을 검증하는 테스트 파일명이 각주로 달려 있다.
-
----
-
-## English summary
-
-essentials-modkit is a standalone mod manager and packaging standard for RPG
-Maker–based Essentials fan games (Pokémon Z, Wishing Star, and similar). A mod
-is one folder with a `mod.json` card, readable `.rb` scripts, and asset
-originals; the distribution unit is that folder zipped. The tool auto-detects
-the install contract (bundled `PluginScripts.rxdata`, legacy `Scripts.rxdata`
-injection, or asset-only), runs a three-layer pre-install check (block on
-unmet requirements/conflicts, auto-place from declared ordering, warn on
-undeclared overlaps), and never deletes — foreign files found during diagnosis
-are quarantined under `_quarantine/<date>/`, fully restorable. End users grab
-`modkit.exe` from Releases (double-click GUI, WebView2 required); authors
-scaffold with `modkit new`, validate with `modkit lint`, and ship the folder
-as a zip. Agent-facing entry point: `llms.txt`. Full contract: `SPEC.md`.
+합성 데이터만이 아니라 실제 게임 설치본 두 개(포켓몬 Z, Wishing Star)로
+설치와 제거를 왕복시키고 바이트 단위로 대조했다. 그 기록이
+[docs/validation.md](docs/validation.md)에 있다. SPEC.md의 각 절에는 그 절을
+검증하는 테스트 파일 이름을 달아 뒀다.
