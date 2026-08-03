@@ -1,0 +1,691 @@
+"""모드를 게임 밖에 따로 보관하고, 설치본에 얹거나 뺀다.
+
+Essentials 팬게임의 모드는 플러그인 묶음(`Data/PluginScripts.rxdata`) 안에 눌려 들어
+있다. 그 안에 두면 버전을 올릴 때마다 배포자의 묶음으로 갈리면서 사라지고, 어느 설치본에
+무엇이 얹혔는지도 알기 어렵다.
+
+그래서 **모드를 꺼내 보관소에 둔다.** 보관소에서는 사람이 읽을 수 있는 `.rb` 파일과
+`mod.json` 한 장으로 눕는다. 게임에 얹는 것은 거기서 다시 묶어 넣는 일이고, 빼는 것은
+묶음에서 그 항목만 덜어내는 일이다. 코어와 독립적인 모드라면 이 왕복만으로 충분하다.
+
+**모드는 꺼내 온 게임에 매인다.** 다른 게임에도 같은 이름의 클래스가 있다는 것은 얹어도
+된다는 근거가 못 된다 — 이름이 같다고 같은 물건을 가리키는 법이 없다. 그래서 보관소는
+모드마다 어느 게임에서 나왔는지 적어 두고, 그 게임의 설치본에만 내놓는다.
+
+지키는 것 넷.
+
+  - **얹기 전에 원본을 백업한다**(`PluginScripts.rxdata.orig`). 이미 있으면 덮지 않는다 —
+    두 번째 얹기가 첫 결과를 원본으로 착각하면 되돌릴 데가 없다.
+  - **묶음 끝에 얹는다.** 게임이 배열 순서대로 읽어서 마지막 재정의가 이긴다.
+  - **옆에 쓰고 이름을 바꿔 갈아 끼운다.** 버전 폴더끼리 하드링크로 이어져 있을 수 있어
+    제자리에서 고치면 다른 버전까지 함께 바뀐다.
+  - **스크립트만 넣고 끝내지 않는다.** 그림·소리를 데리고 오는 모드는 그것까지 넣어야
+    온전히 돈다(`modassets`). 코드만 들어가면 오류 없이 반만 사는 채로 돈다.
+"""
+import io
+import json
+import re
+import zlib
+from dataclasses import dataclass
+from pathlib import Path
+
+from . import modassets, rubyread
+
+BUNDLE = "Data/PluginScripts.rxdata"
+BACKUP = "Data/PluginScripts.rxdata.orig"
+# 묶음이 없는 옛 엔진(포켓몬 Z 팬게임)의 스크립트 모드는 코어 배열에 섹션으로 들어간다.
+# 규약은 poke-essentials의 주입기와 한 벌이다 — 섹션 제목 `MOD:<모드명>/<파일명>`,
+# `Main` 앞에 꽂기(RGSS는 배열 순서대로 실행하고 Main 뒤는 영영 안 돈다).
+SCRIPTS = "Data/Scripts.rxdata"
+SCRIPTS_BACKUP = "Data/Scripts.rxdata.orig"
+MOD_MARK = "MOD:"
+CARD = "mod.json"
+import os
+DEFAULT_STORE = Path(os.environ.get("MODKIT_STORE", "mods"))
+_UNSAFE = re.compile(r'[/\\:*?"<>|]')
+
+
+class NoBundle(Exception):
+    """플러그인 파일이 없다."""
+
+
+class ModMissing(Exception):
+    """그런 모드가 없다."""
+
+
+class BaseChanged(Exception):
+    """모드가 기대하는 원문과 게임의 지금 원문이 다르다 — 훅이 조용히 어긋날 수 있다."""
+
+
+@dataclass(frozen=True)
+class Mod:
+    name: str
+    folder: Path
+    scripts: tuple  # (스크립트 이름, 소스)
+    meta: dict
+    game: str = ""  # 이 모드가 매인 게임
+    from_version: str = ""  # 꺼내 온 설치본의 버전 지문
+    from_build: str = ""  # 그 설치본의 폴더 이름
+    harvested_at: str = ""  # 꺼낸 시각
+    updated_at: str = ""  # 스크립트가 마지막으로 바뀐 시각
+    baseline_taken: bool = False  # 원본 코드를 저장해 봤는가 (빈 것과 안 해 본 것은 다르다)
+    description: str = ""  # 이 모드가 무엇을 하는지 — mod.json에서 사람이 고쳐 쓴다
+    assets: tuple = ()  # 함께 들어가야 하는 그림·소리 (`modassets` 참고)
+
+    @property
+    def line_count(self) -> int:
+        return sum(source.count("\n") + 1 for _, source in self.scripts)
+
+
+# ── 설치본 쪽 ────────────────────────────────────────────────
+
+def installed(game_dir: Path | str) -> list:
+    """이 설치본에 얹혀 있는 모드 이름을 순서대로.
+
+    묶음이 있으면 묶음에서, 없으면(옛 엔진) 코어의 주입 섹션에서 읽는다.
+    """
+    game_dir = Path(game_dir)
+    if (game_dir / BUNDLE).is_file():
+        return [str(entry[0]) for entry in _read(game_dir / BUNDLE)]
+    if (game_dir / SCRIPTS).is_file():
+        return _injected(game_dir)
+    raise NoBundle(f"플러그인 파일이 없어요: {game_dir / BUNDLE}")
+
+
+_injected_memo: dict = {}
+
+
+def _injected(game_dir: Path) -> list:
+    """코어에 주입된 모드 이름들. 화면이 폴링으로 묻는 자리라 파일 도장으로 기억해 둔다."""
+    scripts = game_dir / SCRIPTS
+    told = scripts.stat()
+    key = str(scripts)
+    stamp = (told.st_size, told.st_mtime_ns)
+    kept = _injected_memo.get(key)
+    if kept and kept[0] == stamp:
+        return list(kept[1])
+    names = []
+    for entry in rubyread.loads(scripts.read_bytes()):
+        title = bytes(entry[1]).decode("utf-8", "replace")
+        if title.startswith(MOD_MARK):
+            name = title[len(MOD_MARK):].split("/", 1)[0]
+            if name not in names:
+                names.append(name)
+    _injected_memo[key] = (stamp, tuple(names))
+    return names
+
+
+class WrongGame(Exception):
+    """다른 게임의 모드다."""
+
+
+class NameTaken(Exception):
+    """그 이름을 쓰는 모드가 이미 있다."""
+
+
+def apply(store: Path | str, name: str, game_dir: Path | str) -> dict:
+    """보관소의 모드를 설치본에 얹는다. 같은 이름이 있으면 갈아 끼운다."""
+    from . import gameinfo
+
+    mod = read_mod(store, name)
+    game_dir = Path(game_dir)
+
+    here = gameinfo.read_title(game_dir)
+    if mod.game and mod.game != here:
+        raise WrongGame(
+            f"`{mod.name}`은(는) `{mod.game}` 전용 모드예요. 이 게임은 `{here}`입니다.\n"
+            "클래스 이름이 같아도 다른 게임에서는 다른 것을 가리킬 수 있어요."
+        )
+    if not mod.scripts:
+        # 스크립트 없이 파일만 갈아 끼우는 모드 — 플러그인 묶음이 없는 게임(포켓몬 Z처럼
+        # 옛 엔진)에도 얹을 수 있어야 하므로 묶음은 아예 건드리지 않는다.
+        did = "덮어씀" if modassets.applied(mod, game_dir) else "설치됨"
+        brought = modassets.install(mod, game_dir)
+        return {
+            "mod": mod.name,
+            "did": did,
+            "total": 0,
+            "backup": "",
+            "assets": len(brought["written"]) + len(brought["skipped"]),
+        }
+
+    if not (game_dir / BUNDLE).is_file():
+        # 플러그인 묶음이 없는 옛 엔진(포켓몬 Z처럼)의 스크립트 모드는 주입형이다 —
+        # Scripts.rxdata에 섹션으로 덧붙인다. 규약은 poke-essentials 주입기와 한 벌.
+        return _inject(mod, game_dir)
+    entries = _read(game_dir / BUNDLE)
+
+    packed = _pack_mod(mod)
+    at = next((i for i, entry in enumerate(entries) if str(entry[0]) == mod.name), None)
+    if at is None:
+        entries = entries + [packed]
+        did = "설치됨"
+    else:
+        entries = list(entries)
+        entries[at] = packed
+        did = "덮어씀"
+
+    backup = _back_up(game_dir)
+    _write(game_dir / BUNDLE, entries)
+    # 에셋을 먼저 넣지 않는 이유: 스크립트 쓰기가 실패하면 게임 폴더에 남길 것이 없다.
+    brought = modassets.install(mod, game_dir)
+    return {
+        "mod": mod.name,
+        "did": did,
+        "total": len(entries),
+        "backup": str(backup),
+        "assets": len(brought["written"]) + len(brought["skipped"]),
+    }
+
+
+def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> dict:
+    """설치본에서 그 플러그인과, 그 모드가 데리고 온 파일을 함께 뺀다.
+
+    `store`를 주면 그 모드가 무엇을 데리고 왔는지 읽어 되돌린다. 보관소에서 이미 사라진
+    모드라도 스크립트는 뺄 수 있어야 하므로, 못 읽으면 스크립트만 뺀다.
+    """
+    game_dir = Path(game_dir)
+
+    told = None
+    try:
+        told = read_mod(store or DEFAULT_STORE, name)
+    except ModMissing:
+        pass
+    if told is not None and told.scripts and not (game_dir / BUNDLE).is_file():
+        # 주입형 — 코어에서 이 모드의 섹션만 걷어 낸다. 다른 모드의 섹션은 그대로 선다.
+        return _uninject(told, game_dir)
+
+    if told is not None and not told.scripts:
+        # 파일만 갈아 끼우는 모드 — 묶음에 이름이 없으니 에셋으로 설치 여부를 가른다.
+        if not modassets.applied(told, game_dir):
+            raise ModMissing(f"설치돼 있지 않아요: {name}")
+        taken = modassets.remove(told, game_dir)
+        return {
+            "mod": name,
+            "did": "제거됨",
+            "total": 0,
+            "assets": len(taken["removed"]) + len(taken["reverted"]),
+        }
+
+    entries = _read(game_dir / BUNDLE)
+    kept = [entry for entry in entries if str(entry[0]) != name]
+    if len(kept) == len(entries):
+        raise ModMissing(f"설치돼 있지 않아요: {name}")
+
+    _back_up(game_dir)
+    _write(game_dir / BUNDLE, kept)
+
+    taken = {"removed": [], "reverted": []}
+    try:
+        taken = modassets.remove(read_mod(store or DEFAULT_STORE, name), game_dir)
+    except ModMissing:
+        pass  # 보관소에 없는 모드 — 무엇을 데리고 왔는지 알 길이 없다
+    return {
+        "mod": name,
+        "did": "제거됨",
+        "total": len(kept),
+        "assets": len(taken["removed"]) + len(taken["reverted"]),
+    }
+
+
+def rename(store: Path | str, old: str, new: str, builds=()) -> dict:
+    """모드의 이름표를 바꾼다. 설치돼 있는 버전에서는 옛 이름을 걷고 새 이름으로 다시 넣는다.
+
+    **이름만 바꾸고 설치본을 두면 게임에 옛 이름이 남아 둘이 된다.** 그래서 `builds`에 그
+    모드를 든 버전들을 함께 준다.
+
+    루비 코드는 건드리지 않는다 — 같은 모드를 든 다른 자리(원본을 두는 프로젝트 같은 곳)와
+    어긋나기 때문이다. 바뀌는 것은 보관소 폴더 이름, `mod.json`의 이름, 그리고 게임이 읽는
+    묶음 속 이름뿐이다.
+    """
+    store = Path(store)
+    mod = read_mod(store, old)
+    fresh = mod.folder.with_name(_safe(new))  # 같은 게임 폴더 안에서만 옮긴다
+    if fresh.exists():
+        raise NameTaken(f"이미 그 이름을 쓰는 모드가 있어요: {new}")
+
+    was_on = [Path(where) for where in builds if old in installed(where)]
+    for where in was_on:
+        remove(old, where, store)
+
+    mod.folder.rename(fresh)
+    card = fresh / CARD
+    told = json.loads(card.read_text(encoding="utf-8"))
+    told["name"] = new
+    if isinstance(told.get("meta"), dict) and ":name" in told["meta"]:
+        told["meta"][":name"] = new  # Essentials가 플러그인을 부르는 이름
+    card.write_text(json.dumps(told, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    for where in was_on:
+        apply(store, new, where)
+    return {"from": old, "to": new, "moved": len(was_on)}
+
+
+# ── 보관소 쪽 ────────────────────────────────────────────────
+
+def harvest(
+    game_dir: Path | str,
+    names: list,
+    store: Path | str = DEFAULT_STORE,
+    game: str | None = None,
+    at: str | None = None,
+    version: str | None = None,
+) -> list:
+    """설치본에 얹힌 모드를 꺼내 보관소에 눕힌다.
+
+    `game`은 이 모드가 매일 게임의 이름이다. 안 주면 설치본의 제목을 쓴다.
+    """
+    game_dir, store = Path(game_dir), Path(store)
+    found = {str(entry[0]): entry for entry in _read(game_dir / BUNDLE)}
+
+    missing = [name for name in names if name not in found]
+    if missing:
+        raise ModMissing(f"이 게임에 설치돼 있지 않아요: {', '.join(missing)}")
+
+    from . import gameinfo
+
+    belongs_to = game or gameinfo.read_title(game_dir)
+    when = at or gameinfo.now()
+    version = version or ""   # 버전 지문은 부르는 쪽이 알면 준다 (예: 상위 라이브러리)
+
+    kept = []
+    for name in names:
+        kept.append(
+            _lay_down(
+                found[name],
+                store,
+                came_from=game_dir,
+                game=belongs_to,
+                version=version,
+                when=when,
+            )
+        )
+    return kept
+
+
+def _find_folder(store: Path, name: str):
+    """모드 폴더를 찾는다. 보관소는 게임별 하위 폴더로 나뉘어 있다
+    (`<보관소>/<게임>/<모드>/mod.json`). 평면에 남은 옛 배치도 함께 본다."""
+    import glob as _glob
+
+    safe = _safe(name)
+    flat = store / safe
+    if (flat / CARD).is_file():
+        return flat
+    # 이름의 대괄호가 glob 문자 클래스로 읽히지 않게 이스케이프한다
+    for card in sorted(store.glob(f"*/{_glob.escape(safe)}/{CARD}")):
+        return card.parent
+    return None
+
+
+def read_mod(store: Path | str, name: str) -> Mod:
+    """보관소에 누워 있는 모드 하나를 읽는다."""
+    folder = _find_folder(Path(store), name)
+    if folder is None:
+        raise ModMissing(f"저장된 모드가 아니에요: {name}")
+    card = folder / CARD
+
+    told = json.loads(card.read_text(encoding="utf-8"))
+    scripts = tuple(
+        (one["script_name"], _read_keeping_line_ends(folder / one["file"]))
+        for one in told["scripts"]
+    )
+    return Mod(
+        name=told["name"],
+        folder=folder,
+        scripts=scripts,
+        meta=told.get("meta") or {},
+        game=told.get("game", ""),
+        from_version=told.get("from_version", ""),
+        from_build=told.get("from_build", ""),
+        harvested_at=told.get("harvested_at", ""),
+        updated_at=told.get("updated_at", ""),
+        baseline_taken=bool(told.get("baseline_taken")),
+        description=told.get("description", ""),
+        assets=tuple(told.get("assets") or ()),
+    )
+
+
+def shelf(store: Path | str = DEFAULT_STORE, game: str | None = None) -> list:
+    """보관소에 있는 모드. `game`을 주면 그 게임에 매인 것만.
+
+    다른 게임 것을 섞어 내놓지 않는다 — 얹을 수 있는지 이름으로 짐작하지 않기로 했다.
+    """
+    store = Path(store)
+    if not store.is_dir():
+        return []
+    found = []
+    for card in sorted(store.glob(f"*/{CARD}")) + sorted(store.glob(f"*/*/{CARD}")):
+        told = json.loads(card.read_text(encoding="utf-8"))
+        mod = read_mod(store, told["name"])
+        if game is None or mod.game == game:
+            found.append(mod)
+    return found
+
+
+# ── 안쪽 ─────────────────────────────────────────────────────
+
+def _kept(card: Path, key: str, empty):
+    """다시 가져와도 사람이 손으로 적어 둔 것은 지우지 않는다 — 설명과 에셋 목록."""
+    if not card.is_file():
+        return empty
+    try:
+        return json.loads(card.read_text(encoding="utf-8")).get(key) or empty
+    except json.JSONDecodeError:
+        return empty
+
+
+def describe(store: Path | str, name: str, description: str) -> Mod:
+    """모드 설명을 고쳐 쓴다."""
+    mod = read_mod(store, name)
+    card = mod.folder / CARD
+    told = json.loads(card.read_text(encoding="utf-8"))
+    told["description"] = description
+    card.write_text(json.dumps(told, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return read_mod(store, name)
+
+
+def _read_keeping_line_ends(path: Path) -> str:
+    """줄바꿈을 건드리지 않고 읽는다.
+
+    원본 스크립트는 CRLF다. 그냥 읽으면 파이썬이 LF로 바꿔 주고, 되묶을 때 원본과 다른
+    바이트가 나온다. (`Path.read_text(newline=…)`는 3.13부터라 직접 연다.)
+    """
+    with open(path, encoding="utf-8", newline="") as handle:
+        return handle.read()
+
+
+def _game_folder(game: str) -> str:
+    """게임 이름을 하위 폴더 이름으로. 콜론은 NTFS가 못 받아 떼어 낸다."""
+    return _safe((game or "기타").replace(":", "")).strip() or "기타"
+
+
+def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when: str) -> Mod:
+    name = str(entry[0])
+    folder = _find_folder(store, name) or store / _game_folder(game) / _safe(name)
+    folder.mkdir(parents=True, exist_ok=True)
+    kept_description = _kept(folder / CARD, "description", "")
+    kept_assets = _kept(folder / CARD, "assets", [])
+
+    for stale in folder.glob("*.rb"):
+        stale.unlink()  # 다시 꺼낼 때 옛 이름의 파일이 남지 않게
+
+    scripts, written = [], []
+    for order, script in enumerate(entry[2] or []):
+        script_name = str(script[0])
+        source = zlib.decompress(bytes(script[1])).decode("utf-8", "replace")
+        # 원본 스크립트는 줄바꿈이 CRLF다. newline=""로 써서 그대로 오간다.
+        filename = _safe(script_name if script_name.endswith(".rb") else f"{script_name}.rb")
+        if not filename[:1].isdigit():
+            filename = f"{order:03d}_{filename}"  # 이름에 순서가 없으면 붙여 준다
+        (folder / filename).write_text(source, encoding="utf-8", newline="")
+        scripts.append((script_name, source))
+        written.append({"file": filename, "script_name": script_name})
+
+    (folder / CARD).write_text(
+        json.dumps(
+            {
+                "name": name,
+                "game": game,
+                "description": kept_description,
+                "from_version": version,
+                "from_build": came_from.name,
+                "harvested_at": when,
+                "updated_at": when,
+                "baseline_taken": True,
+                "meta": _plain(entry[1]),
+                "assets": kept_assets,
+                "scripts": written,
+                "harvested_from": str(came_from),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    mod = Mod(
+        name=name,
+        folder=folder,
+        scripts=tuple(scripts),
+        meta=_plain(entry[1]),
+        game=game,
+        description=kept_description,
+        assets=tuple(kept_assets),
+        from_version=version,
+        from_build=came_from.name,
+        harvested_at=when,
+        updated_at=when,
+        baseline_taken=True,
+    )
+    _take_baseline(mod, came_from)
+    return mod
+
+
+def _take_baseline(mod: "Mod", game_dir: Path) -> None:
+    """모드가 덮어쓰는 메서드의 게임 쪽 원문을 함께 떠 둔다.
+
+    이걸 떠 두면 꺼내 온 설치본이 사라져도 "이 판에서 그 메서드가 바뀌었는지"를 따질 수
+    있다. 모드 자신은 빼고 읽는다 — 자기 코드를 원본으로 착각하면 대조가 무의미해진다.
+    """
+    from . import modfit
+
+    try:
+        baseline = modfit.take_baseline(game_dir, mod.scripts, skip=mod.name)
+    except Exception as unreadable:
+        # 꺼내기 자체는 성공이지만, 못 떴다는 사실은 남긴다 — 나중에 "맞음"으로 오해하면 안 된다.
+        _note_baseline(mod.folder, taken=False, why=str(unreadable))
+        return
+    if baseline:
+        modfit.write_baseline(mod.folder, baseline)
+
+
+def _note_baseline(folder: Path, taken: bool, why: str = "") -> None:
+    card = folder / CARD
+    told = json.loads(card.read_text(encoding="utf-8"))
+    told["baseline_taken"] = taken
+    if why:
+        told["baseline_failed"] = why
+    card.write_text(json.dumps(told, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _pack_mod(mod: Mod) -> list:
+    return [
+        mod.name,
+        _ruby(mod.meta),
+        [[name, zlib.compress(source.encode("utf-8"))] for name, source in mod.scripts],
+    ]
+
+
+def _inject(mod: Mod, game_dir: Path) -> dict:
+    """모드 스크립트를 코어 배열의 `Main` 앞에 섹션으로 꽂는다.
+
+    - 자기 섹션(`MOD:<이름>/`)이 이미 있으면 걷어 내고 새로 꽂는다 — 두 번 눌러도 안 쌓인다.
+    - `mod.json`의 `expects`(섹션 제목 → 원문 md5)가 있으면 지금 코어와 대조하고, 다르면
+      멈춘다 — 게임 판이 올라 원문이 바뀌었는데 낡은 훅을 꽂으면 조용히 어긋난다.
+    - 첫 주입 전의 코어를 `.orig`로 남긴다. 쓰기 전에 되읽어 왕복을 확인한다.
+    """
+    import hashlib
+
+    scripts_path = game_dir / SCRIPTS
+    if not scripts_path.is_file():
+        raise NoBundle(f"코어 스크립트가 없어요: {scripts_path}")
+    entries = rubyread.loads(scripts_path.read_bytes())
+
+    expects = _kept(mod.folder / CARD, "expects", {})
+    if expects:
+        md5_by_title = {}
+        for entry in entries:
+            source = zlib.decompress(bytes(entry[2]))
+            md5_by_title.setdefault(
+                bytes(entry[1]).decode("utf-8", "replace"), hashlib.md5(source).hexdigest()
+            )
+        for title, want in expects.items():
+            got = md5_by_title.get(title)
+            if got != want:
+                raise BaseChanged(
+                    f"`{mod.name}`이 기대하는 원문과 게임이 달라요 — 섹션 {title} "
+                    f"md5 {got} (기대 {want}). 게임 판이 바뀌었으면 훅부터 다시 확인해요."
+                )
+
+    prefix = f"{MOD_MARK}{mod.name}/".encode("utf-8")
+    kept = [e for e in entries if not bytes(e[1]).startswith(prefix)]
+    did = "덮어씀" if len(kept) != len(entries) else "설치됨"
+
+    fresh = []
+    for script_name, source in mod.scripts:
+        title = f"{MOD_MARK}{mod.name}/{script_name}".encode("utf-8")
+        sid = int(hashlib.md5(title).hexdigest()[:7], 16)  # 결정적이고 안 겹치는 id
+        fresh.append([sid, title, zlib.compress(source.encode("utf-8"))])
+
+    main_at = max(
+        (i for i, e in enumerate(kept) if bytes(e[1]) == b"Main"), default=len(kept)
+    )
+    result = kept[:main_at] + fresh + kept[main_at:]
+
+    from . import rubywrite
+
+    payload = rubywrite.dumps(result)
+    again = rubyread.loads(payload)  # 쓰기 전에 왕복 확인 — 코어를 깨뜨리면 게임이 안 뜬다
+    if len(again) != len(result) or any(
+        bytes(a[1]) != bytes(b[1]) for a, b in zip(again, result)
+    ):
+        raise NoBundle("왕복 확인이 어긋났어요 — 코어를 건드리지 않았어요")
+
+    backup = game_dir / SCRIPTS_BACKUP
+    if not backup.exists():
+        _put(backup, scripts_path.read_bytes())
+    _put(scripts_path, payload)
+
+    brought = modassets.install(mod, game_dir)
+    return {
+        "mod": mod.name,
+        "did": did,
+        "total": len(result),
+        "backup": str(backup),
+        "assets": len(brought["written"]) + len(brought["skipped"]),
+    }
+
+
+def _uninject(mod: Mod, game_dir: Path) -> dict:
+    """코어에서 이 모드의 섹션만 걷어 낸다."""
+    from . import rubywrite
+
+    scripts_path = game_dir / SCRIPTS
+    if not scripts_path.is_file():
+        raise ModMissing(f"설치돼 있지 않아요: {mod.name}")
+    entries = rubyread.loads(scripts_path.read_bytes())
+    prefix = f"{MOD_MARK}{mod.name}/".encode("utf-8")
+    kept = [e for e in entries if not bytes(e[1]).startswith(prefix)]
+    if len(kept) == len(entries):
+        raise ModMissing(f"설치돼 있지 않아요: {mod.name}")
+    _put(scripts_path, rubywrite.dumps(kept))
+
+    taken = modassets.remove(mod, game_dir)
+    return {
+        "mod": mod.name,
+        "did": "제거됨",
+        "total": len(kept),
+        "assets": len(taken["removed"]) + len(taken["reverted"]),
+    }
+
+
+_core_memo: dict = {}
+
+
+def same_core(source: Path, target: Path) -> bool:
+    """두 코어가 주입 섹션을 빼고 같은가. 파일 도장으로 기억해 폴링에도 싸다."""
+    try:
+        key = (str(source), str(target))
+        stamp = tuple((p.stat().st_size, p.stat().st_mtime_ns) for p in (source, target))
+    except OSError:
+        return False
+    kept = _core_memo.get(key)
+    if kept and kept[0] == stamp:
+        return kept[1]
+
+    def bones(path: Path):
+        return [
+            (bytes(e[1]), zlib.decompress(bytes(e[2])))
+            for e in rubyread.loads(path.read_bytes())
+            if not bytes(e[1]).decode("utf-8", "replace").startswith(MOD_MARK)
+        ]
+
+    try:
+        told = bones(source) == bones(target)
+    except Exception:
+        told = False  # 어느 쪽이든 Marshal이 아니면 같다고 말할 근거가 없다
+    _core_memo[key] = (stamp, told)
+    return told
+
+
+def _read(bundle: Path) -> list:
+    if not bundle.is_file():
+        raise NoBundle(f"플러그인 파일이 없어요: {bundle}")
+    packed = rubyread.loads(bundle.read_bytes())
+    if not isinstance(packed, list):
+        raise NoBundle(f"플러그인 파일 형식이 달라요: {bundle}")
+    return packed
+
+
+def _back_up(game_dir: Path) -> Path:
+    backup = game_dir / BACKUP
+    if not backup.exists():
+        _put(backup, (game_dir / BUNDLE).read_bytes())
+    return backup
+
+
+def _write(bundle: Path, entries: list) -> None:
+    """묶음을 다시 적는다.
+
+    상류 기록기가 아니라 `rubywrite`를 쓴다 — 상류는 문자열에 번호를 안 매겨 가리킴이
+    어긋나고, 그러면 다른 플러그인의 이름 자리가 엉뚱한 값으로 바뀐다(`rubywrite` 참고).
+    """
+    from . import rubywrite
+
+    _put(bundle, rubywrite.dumps(entries))
+
+
+def _put(target: Path, blob: bytes) -> None:
+    spare = target.with_name(target.name + ".writing")
+    spare.write_bytes(blob)
+    import os
+
+    os.replace(spare, target)
+
+
+def _safe(name: str) -> str:
+    return _UNSAFE.sub("_", name).strip() or "mod"
+
+
+def _plain(value):
+    """루비 심볼이 섞인 메타를 JSON으로 담을 수 있는 모양으로."""
+    from rubymarshal.classes import RubyString, Symbol
+
+    if isinstance(value, Symbol):
+        return {"$sym": str(value).lstrip(":")}
+    if isinstance(value, RubyString):
+        return str(value)
+    if isinstance(value, dict):
+        return {_key(key): _plain(one) for key, one in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_plain(one) for one in value]
+    return value
+
+
+def _key(value) -> str:
+    from rubymarshal.classes import Symbol
+
+    return ":" + str(value).lstrip(":") if isinstance(value, Symbol) else str(value)
+
+
+def _ruby(value):
+    from rubymarshal.classes import Symbol
+
+    if isinstance(value, dict):
+        if set(value) == {"$sym"}:
+            return Symbol(value["$sym"])
+        return {(Symbol(k[1:]) if k.startswith(":") else k): _ruby(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_ruby(one) for one in value]
+    return value
