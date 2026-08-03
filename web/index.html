@@ -57,7 +57,7 @@
 <section id=s-folder class="screen active">
   <div class=panel>
     <h2>게임 폴더</h2>
-    <p class=sub>모드를 관리할 게임 폴더를 골라 주세요.</p>
+    <p class=sub>게임이 설치된 폴더를 골라 주세요. (Game.ini와 Data 폴더가 있는 곳 — 모드 폴더가 아니에요.)</p>
     <button class="big primary" onclick="pickFolder()">폴더 선택</button>
     <div id=recent-list></div>
   </div>
@@ -145,6 +145,10 @@ function openFolder(path) {
   api().remember(path).then(() => {
     api().game_status(path).then(status => {
       if (!status.ok) { toast("폴더를 읽지 못했어요 — " + status.error); return; }
+      if (!status.looks_like_game) {
+        toast("여기는 게임 폴더가 아닌 것 같아요 — Data 폴더나 Game.ini가 안 보여요.");
+        return;
+      }
       if (status.has_manifest) {
         runDiagnose();
       } else {

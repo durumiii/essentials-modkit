@@ -77,6 +77,9 @@ class Api:
                 "title": gameinfo.read_title(game_dir),
                 "installed": installed,
                 "has_manifest": (game_dir / MANIFEST_NAME).is_file(),
+                # 게임 폴더인지 어림 판정 — 엉뚱한 폴더를 골랐을 때 화면이 알려 준다
+                "looks_like_game": (game_dir / "Data").is_dir()
+                or (game_dir / "Game.ini").is_file(),
             }
         except Exception as err:
             return {"ok": False, "error": str(err)}

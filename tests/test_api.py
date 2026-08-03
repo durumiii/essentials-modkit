@@ -185,3 +185,11 @@ def test_diagnose_reports_untracked_count(tmp_path):
 
     moved = api.quarantine_foreign(game)
     assert moved == {"ok": True, "moved": 0, "box": ""}
+
+
+def test_game_status_flags_non_game_folder(tmp_path):
+    from app import Api
+    api = Api(tmp_path / "store", tmp_path / "state.json")
+    (tmp_path / "notgame").mkdir()
+    s = api.game_status(str(tmp_path / "notgame"))
+    assert s["ok"] and s["looks_like_game"] is False
