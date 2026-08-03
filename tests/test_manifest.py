@@ -1,0 +1,53 @@
+"""매니페스트 캡처와 4종 판정."""
+import json
+from pathlib import Path
+
+import pytest
+
+from tests.test_inject import make_core_game, put_mod
+
+
+def test_capture_and_roundtrip(tmp_path):
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir(); (game / "Graphics" / "a.png").write_bytes(b"png")
+    (game / "Saves").mkdir(); (game / "Saves" / "s1.rxdata").write_bytes(b"save")
+
+    m = manifest.capture(game, game="Old Game", version="v1")
+    assert m["modkit_manifest"] == 1
+    assert "Graphics/a.png" in m["files"]
+    assert "Data/Scripts.rxdata" in m["files"]
+    assert not any(p.startswith("Saves/") for p in m["files"])  # 유저 데이터 제외
+
+    manifest.save(m, tmp_path / "manifest.json")
+    assert manifest.load(tmp_path / "manifest.json") == m
+
+
+def test_diagnose_four_verdicts(tmp_path):
+    from modkit import manifest, modstore
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir(); (game / "Graphics" / "a.png").write_bytes(b"png")
+    m = manifest.capture(game, game="Old Game")
+
+    store = tmp_path / "store"
+    put_mod(store, "My Mod")
+    modstore.apply(store, "My Mod", game)                      # 아는 변경 + .orig 백업
+    (game / "Graphics" / "a.png").write_bytes(b"tampered")     # 외래 (변경)
+    (game / "oldpatch.txt").write_bytes(b"trace")              # 외래 (추가)
+    (game / "Game.ini").unlink()                               # 누락
+
+    d = manifest.diagnose(game, m, store=store)
+    assert ("Data/Scripts.rxdata", "My Mod") in d.known
+    assert "Graphics/a.png" in d.foreign and "oldpatch.txt" in d.foreign
+    assert "Game.ini" in d.missing
+    assert "Data/Scripts.rxdata.orig" in d.backups
+    assert "Data/Scripts.rxdata" not in d.foreign              # 아는 변경은 외래가 아니다
+
+
+def test_diagnose_clean(tmp_path):
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    m = manifest.capture(game, game="Old Game")
+    d = manifest.diagnose(game, m)
+    assert d.foreign == () and d.missing == ()
+    assert set(d.intact) == set(m["files"])
