@@ -119,3 +119,39 @@ def diagnose(game_dir, manifest: dict, store=None) -> Diagnosis:
         missing=tuple(missing),
         backups=tuple(sorted(backups)),
     )
+
+
+def quarantine(game_dir, rel_paths, at: str | None = None) -> Path:
+    """외래 파일을 게임 폴더 안 격리함으로 옮긴다. 지우는 일은 하지 않는다."""
+    from . import gameinfo
+    game_dir = Path(game_dir)
+    stamp = (at or gameinfo.now()).replace(":", "-")
+    box = game_dir / "_quarantine" / stamp
+    moved = []
+    for rel in rel_paths:
+        src = (game_dir / rel).resolve()
+        if not src.is_relative_to(game_dir.resolve()):
+            raise ValueError(f"게임 폴더 밖이에요: {rel}")
+        dst = box / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        src.rename(dst)
+        moved.append(rel)
+    return box
+
+
+def restore(game_dir, box: Path) -> list:
+    """격리함 하나를 통째로 원위치한다."""
+    game_dir, box = Path(game_dir), Path(box)
+    back = []
+    for p in sorted(box.rglob("*")):
+        if not p.is_file():
+            continue
+        rel = p.relative_to(box).as_posix()
+        dst = game_dir / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        p.rename(dst)
+        back.append(rel)
+    for d in sorted(box.rglob("*"), reverse=True):
+        d.rmdir()
+    box.rmdir()
+    return back
