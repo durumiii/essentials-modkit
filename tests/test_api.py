@@ -35,6 +35,11 @@ def test_pick_folder_no_window(tmp_path):
     assert api.pick_folder() == {"ok": False, "error": "no-window"}
 
 
+def test_pick_zip_no_window(tmp_path):
+    api, _, _ = make_api(tmp_path)
+    assert api.pick_zip() == {"ok": False, "error": "no-window"}
+
+
 def test_game_status(tmp_path):
     api, store, state = make_api(tmp_path)
     game = make_core_game(tmp_path)
