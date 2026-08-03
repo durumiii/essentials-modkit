@@ -1,0 +1,206 @@
+"""GUI 진입점 — pywebview 창 + Api(js_api).
+
+Api는 순수 파이썬이라 창 없이도 테스트할 수 있다. 모든 메서드는 JSON 직렬화 가능한
+dict를 반환하고 예외를 밖으로 던지지 않는다(`{"ok": False, "error": 사유}`).
+"""
+import json
+import os
+import sys
+import zipfile
+from pathlib import Path, PurePosixPath
+
+from modkit import declare, gameinfo, manifest, modstore
+
+MANIFEST_NAME = "manifest.json"
+LOG_NAME = "modkit-log.jsonl"
+
+
+class Api:
+    def __init__(self, store_dir, state_path):
+        self.store_dir = Path(store_dir)
+        self.state_path = Path(state_path)
+        self._window = None
+
+    def set_window(self, window) -> None:
+        self._window = window
+
+    def pick_folder(self) -> dict:
+        if self._window is None:
+            return {"ok": False, "error": "no-window"}
+        import webview  # 지연 임포트 — 창 없는 환경(테스트)에서는 안 닿는다
+
+        picked = self._window.create_file_dialog(webview.FOLDER_DIALOG)
+        path = picked[0] if picked else None
+        return {"ok": bool(path), "path": path or ""}
+
+    def recent(self) -> dict:
+        try:
+            if not self.state_path.is_file():
+                return {"ok": True, "paths": []}
+            told = json.loads(self.state_path.read_text(encoding="utf-8"))
+            return {"ok": True, "paths": told.get("recent", [])}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def remember(self, path) -> dict:
+        try:
+            path = str(path)
+            paths = self.recent().get("paths", [])
+            paths = [path] + [p for p in paths if p != path]
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            self.state_path.write_text(
+                json.dumps({"recent": paths}, ensure_ascii=False), encoding="utf-8")
+            return {"ok": True, "paths": paths}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def game_status(self, path) -> dict:
+        try:
+            game_dir = Path(path)
+            try:
+                installed = modstore.installed(game_dir)
+            except modstore.NoBundle:
+                installed = []
+            return {
+                "ok": True,
+                "title": gameinfo.read_title(game_dir),
+                "installed": installed,
+                "has_manifest": (game_dir / MANIFEST_NAME).is_file(),
+            }
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def diagnose(self, path) -> dict:
+        game_dir = Path(path)
+        manifest_path = game_dir / MANIFEST_NAME
+        if not manifest_path.is_file():
+            return {"ok": False, "error": "매니페스트가 없어요 — 패치에 manifest.json이 동봉돼 있는지 확인해요."}
+        try:
+            told = manifest.load(manifest_path)
+            diag = manifest.diagnose(game_dir, told, store=self.store_dir)
+            # manifest.json 자신은 캡처 이후에 게임 폴더에 놓이는 우리 쪽 부산물이라
+            # DEFAULT_EXCLUDE에 없다 — 외래로 잡히지 않게 여기서 걸러낸다.
+            return {
+                "ok": True,
+                "intact": len(diag.intact),
+                "known": [list(pair) for pair in diag.known],
+                "foreign": [f for f in diag.foreign if f != MANIFEST_NAME],
+                "missing": [m for m in diag.missing if m != MANIFEST_NAME],
+                "backups": len(diag.backups),
+            }
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def quarantine_foreign(self, path) -> dict:
+        game_dir = Path(path)
+        diag = self.diagnose(path)
+        if not diag["ok"]:
+            return diag
+        foreign = diag["foreign"]
+        if not foreign:
+            return {"ok": True, "moved": 0, "box": ""}
+        try:
+            box = manifest.quarantine(game_dir, foreign)
+            self._log(game_dir, "quarantine_foreign", str(box))
+            return {"ok": True, "moved": len(foreign), "box": str(box)}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def mods(self, path) -> dict:
+        try:
+            game_dir = Path(path)
+            title = gameinfo.read_title(game_dir)
+            try:
+                installed = modstore.installed(game_dir)
+            except modstore.NoBundle:
+                installed = []
+            available = [
+                {"name": mod.name, "description": mod.description, "installed": mod.name in installed}
+                for mod in modstore.shelf(self.store_dir, game=title)
+            ]
+            return {"ok": True, "installed": installed, "available": available}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def apply_mod(self, path, name, force=False) -> dict:
+        game_dir = Path(path)
+        try:
+            done = modstore.apply(self.store_dir, name, game_dir, force=force)
+        except declare.Blocked as no:
+            return {"ok": False, "blocked": no.reasons}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+        self._log(game_dir, "apply_mod", name)
+        return {"ok": True, "did": done["did"], "warnings": done.get("warnings") or []}
+
+    def remove_mod(self, path, name) -> dict:
+        game_dir = Path(path)
+        try:
+            done = modstore.remove(name, game_dir, store=self.store_dir)
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+        self._log(game_dir, "remove_mod", name)
+        return {"ok": True, "did": done["did"], "warnings": []}
+
+    def import_zip(self, zip_path) -> dict:
+        try:
+            with zipfile.ZipFile(zip_path) as zf:
+                names = [n for n in zf.namelist() if not n.endswith("/")]
+                for name in names:
+                    if _escapes(name):
+                        return {"ok": False, "error": f"경로 탈출 항목이에요: {name}"}
+
+                card_name = next(
+                    (n for n in names
+                     if PurePosixPath(n).name == "mod.json" and len(PurePosixPath(n).parts) <= 2),
+                    None)
+                if card_name is None:
+                    return {"ok": False, "error": "mod.json을 못 찾았어요 — zip 루트나 한 단계 아래에 있어야 해요."}
+
+                card = json.loads(zf.read(card_name))
+                mod_name = card["name"]
+                game = card.get("game") or "기타"
+                prefix = PurePosixPath(card_name).parent
+
+                dest = self.store_dir / modstore._game_folder(game) / modstore._safe(mod_name)
+                dest.mkdir(parents=True, exist_ok=True)
+                for name in names:
+                    rel = PurePosixPath(name).relative_to(prefix) if str(prefix) != "." \
+                        else PurePosixPath(name)
+                    target = dest / Path(*rel.parts)
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_bytes(zf.read(name))
+            return {"ok": True, "name": mod_name}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def _log(self, game_dir, action, target) -> None:
+        entry = {"at": gameinfo.now(), "action": action, "target": target}
+        with open(Path(game_dir) / LOG_NAME, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
+def _escapes(name: str) -> bool:
+    p = PurePosixPath(name)
+    return p.is_absolute() or ".." in p.parts
+
+
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv:
+        from modkit.cli import main as cli_main
+        return cli_main(argv)
+
+    import webview  # 지연 임포트 — CLI 경로에서는 pywebview가 없어도 된다
+
+    store_dir = Path(os.environ.get("MODKIT_STORE", modstore.DEFAULT_STORE))
+    state_path = Path.home() / ".modkit" / "state.json"
+    api = Api(store_dir, state_path)
+    window = webview.create_window("modkit", "modkit/web/index.html", js_api=api)
+    api.set_window(window)
+    webview.start()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

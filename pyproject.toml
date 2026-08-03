@@ -5,6 +5,9 @@ description = "Essentials 팬게임 모드 표준 단위와 매니저"
 requires-python = ">=3.12"
 dependencies = ["rubymarshal"]
 
+[project.optional-dependencies]
+gui = ["pywebview"]
+
 [project.scripts]
 modkit = "modkit.cli:main"
 

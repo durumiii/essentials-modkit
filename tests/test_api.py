@@ -1,0 +1,161 @@
+"""GUI 백엔드 Api — 헤드리스 계약 검증."""
+import json
+import zipfile
+
+import pytest
+
+from tests.test_inject import make_core_game, put_mod
+
+
+def make_api(tmp_path):
+    from app import Api
+    store = tmp_path / "store"
+    state = tmp_path / "state.json"
+    return Api(store, state), store, state
+
+
+def test_recent_round_trip(tmp_path):
+    api, store, state = make_api(tmp_path)
+    assert api.recent() == {"ok": True, "paths": []}
+
+    r = api.remember(str(tmp_path / "gameA"))
+    assert r["ok"] and r["paths"] == [str(tmp_path / "gameA")]
+
+    api.remember(str(tmp_path / "gameB"))
+    got = api.recent()
+    assert got["paths"] == [str(tmp_path / "gameB"), str(tmp_path / "gameA")]
+
+    # 다시 기억하면 맨 앞으로, 중복 없음
+    api.remember(str(tmp_path / "gameA"))
+    assert api.recent()["paths"] == [str(tmp_path / "gameA"), str(tmp_path / "gameB")]
+
+
+def test_pick_folder_no_window(tmp_path):
+    api, _, _ = make_api(tmp_path)
+    assert api.pick_folder() == {"ok": False, "error": "no-window"}
+
+
+def test_game_status(tmp_path):
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+
+    status = api.game_status(game)
+    assert status["ok"] is True
+    assert status["title"] == "Old Game"
+    assert status["installed"] == []  # 묶음도 주입도 없는 첫 상태 (NoBundle → [])
+    assert status["has_manifest"] is False
+
+
+def test_diagnose_requires_manifest(tmp_path):
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+
+    r = api.diagnose(game)
+    assert r == {"ok": False, "error": r["error"]}
+    assert "매니페스트가 없어요" in r["error"]
+
+
+def test_diagnose_clean_and_foreign(tmp_path):
+    from modkit import manifest as manifest_mod
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    made = manifest_mod.capture(game, game="Old Game")
+    manifest_mod.save(made, game / "manifest.json")
+
+    r = api.diagnose(game)
+    assert r["ok"] is True
+    assert r["foreign"] == [] and r["missing"] == [] and r["known"] == []
+    assert r["backups"] == 0
+    assert r["intact"] >= 1
+
+    (game / "oldpatch.txt").write_bytes(b"trace")
+    r = api.diagnose(game)
+    assert r["ok"] is True
+    assert r["foreign"] == ["oldpatch.txt"]
+
+
+def test_quarantine_foreign_then_clean(tmp_path):
+    from modkit import manifest as manifest_mod
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    made = manifest_mod.capture(game, game="Old Game")
+    manifest_mod.save(made, game / "manifest.json")
+    (game / "oldpatch.txt").write_bytes(b"trace")
+
+    r = api.quarantine_foreign(game)
+    assert r["ok"] is True
+    assert r["moved"] == 1
+    assert not (game / "oldpatch.txt").exists()
+
+    again = api.diagnose(game)
+    assert again["foreign"] == []
+
+    # 로그가 남는다
+    log = (game / "modkit-log.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(log) == 1
+    entry = json.loads(log[0])
+    assert entry["action"] == "quarantine_foreign"
+
+
+def test_apply_and_remove_mod_round_trip(tmp_path):
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    put_mod(store, "My Mod")
+
+    got = api.mods(game)
+    assert got["ok"] is True
+    assert got["installed"] == []
+    assert got["available"] == [{"name": "My Mod", "description": "", "installed": False}]
+
+    applied = api.apply_mod(game, "My Mod")
+    assert applied == {"ok": True, "did": "설치됨", "warnings": []}
+
+    got = api.mods(game)
+    assert got["available"][0]["installed"] is True
+
+    removed = api.remove_mod(game, "My Mod")
+    assert removed["ok"] is True
+    assert removed["did"] == "제거됨"
+
+    log = (game / "modkit-log.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    actions = [json.loads(line)["action"] for line in log]
+    assert actions == ["apply_mod", "remove_mod"]
+
+
+def test_apply_mod_blocked(tmp_path):
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    put_mod(store, "Needs Other", extra={"requires": ["Other"]})
+
+    r = api.apply_mod(game, "Needs Other")
+    assert r["ok"] is False
+    assert "blocked" in r
+    assert any("Other" in why for why in r["blocked"])
+
+
+def test_import_zip_installs_mod(tmp_path):
+    api, store, state = make_api(tmp_path)
+    zpath = tmp_path / "mod.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("Zipped Mod/mod.json", json.dumps(
+            {"name": "Zipped Mod", "game": "Old Game", "scripts": []}))
+        zf.writestr("Zipped Mod/001_Zipped.rb", "def zipped\nend\n")
+
+    r = api.import_zip(zpath)
+    assert r == {"ok": True, "name": "Zipped Mod"}
+
+    from modkit import modstore
+    mod = modstore.read_mod(store, "Zipped Mod")
+    assert mod.game == "Old Game"
+    assert (mod.folder / "001_Zipped.rb").is_file()
+
+
+def test_import_zip_rejects_path_escape(tmp_path):
+    api, store, state = make_api(tmp_path)
+    zpath = tmp_path / "evil.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("mod.json", json.dumps({"name": "Evil", "game": "Old Game", "scripts": []}))
+        zf.writestr("../escape.rb", "haha\n")
+
+    r = api.import_zip(zpath)
+    assert r["ok"] is False
