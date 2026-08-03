@@ -53,7 +53,8 @@ def _cmd_apply(args) -> int:
         for why in no.reasons:
             print(why, file=sys.stderr)
         return 1
-    except (modstore.ModMissing, modstore.WrongGame, modstore.BaseChanged) as err:
+    except (modstore.ModMissing, modstore.WrongGame, modstore.BaseChanged,
+            modstore.NoBundle) as err:
         print(str(err), file=sys.stderr)
         return 1
     print(f"{done['mod']}: {done['did']}")
@@ -65,7 +66,7 @@ def _cmd_apply(args) -> int:
 def _cmd_remove(args) -> int:
     try:
         done = modstore.remove(args.name, args.game_dir, store=args.store)
-    except modstore.ModMissing as err:
+    except (modstore.ModMissing, modstore.NoBundle) as err:
         print(str(err), file=sys.stderr)
         return 1
     print(f"{done['mod']}: {done['did']}")
