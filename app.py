@@ -196,19 +196,35 @@ def _escapes(name: str) -> bool:
     return p.is_absolute() or ".." in p.parts
 
 
+def _attach_console() -> None:
+    """--windowed로 묶은 exe는 stdout이 없다 — 부모 콘솔에 붙여 CLI 출력이 보이게 한다."""
+    import ctypes
+
+    kernel32 = ctypes.windll.kernel32
+    if not kernel32.AttachConsole(-1):  # -1 = ATTACH_PARENT_PROCESS
+        return
+    kernel32.SetConsoleOutputCP(65001)  # 한글 출력이 cp949에서 깨지지 않게
+    sys.stdout = open("CONOUT$", "w", encoding="utf-8", errors="replace", buffering=1)
+    sys.stderr = open("CONOUT$", "w", encoding="utf-8", errors="replace", buffering=1)
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv:
+        if sys.platform == "win32" and getattr(sys, "frozen", False):
+            _attach_console()
         from modkit.cli import main as cli_main
         return cli_main(argv)
 
     import webview  # 지연 임포트 — CLI 경로에서는 pywebview가 없어도 된다
 
+    # onefile exe에서는 소스가 아니라 풀린 임시 폴더(_MEIPASS)에 web/이 놓인다.
+    index = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "web" / "index.html"
     store_dir = Path(os.environ.get("MODKIT_STORE", modstore.DEFAULT_STORE))
     state_path = Path.home() / ".modkit" / "state.json"
     api = Api(store_dir, state_path)
     window = webview.create_window(
-        "modkit — 모드 관리자", "modkit/web/index.html", js_api=api,
+        "modkit — 모드 관리자", str(index), js_api=api,
         width=780, height=680, min_size=(560, 480))
     api.set_window(window)
     webview.start()

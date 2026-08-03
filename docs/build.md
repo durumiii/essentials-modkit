@@ -1,0 +1,54 @@
+# 윈도우 exe 굽기
+
+WSL 안에서 `python3 build.py` 한 줄이면 `dist/modkit.exe`가 나온다. 빌드는 윈도우 쪽
+파이썬으로 돌아가고, WSL은 소스를 옮기고 결과를 받아오는 심부름만 한다.
+
+## build.py가 하는 일
+
+1. 소스를 `C:\Users\durumii\AppData\Local\Temp\modkit-build\`로 복사한다
+   (`.venv`·`.git`·`dist`·`build`·`__pycache__`·`.pytest_cache` 제외).
+2. 그 폴더에서 PowerShell로 PyInstaller를 돌린다.
+3. 나온 exe를 WSL 쪽 `dist/`로 가져오고 크기·sha256을 찍는다.
+4. 임시 폴더를 지운다. 빌드가 실패하면 임시 폴더를 남겨 두니 로그를 그대로 볼 수 있다.
+
+수동으로 재현하려면 위 1번처럼 복사한 뒤 그 폴더에서:
+
+```
+uv run --no-project --python 3.13 --with pyinstaller --with pywebview --with rubymarshal \
+  pyinstaller --onefile --windowed --name modkit --add-data "web;web" app.py
+```
+
+## 왜 임시 폴더로 복사하나
+
+WSL 저장소를 윈도우에서 보면 `\\wsl.localhost\...` UNC 경로가 되는데, 그 위에서 uv는
+프로젝트의 리눅스용 `.venv`를 동기화하려다 깨진다. `--no-project`로 프로젝트 환경을
+아예 건드리지 않게 하고, 소스도 윈도우 로컬 디스크에 두면 두 문제가 함께 사라진다.
+
+## 콘솔 정책
+
+`--windowed`로 묶어 GUI 실행에는 검은 콘솔 창이 뜨지 않는다. 대신 인자를 주고 실행하면
+`app.py`의 `_attach_console()`이 `AttachConsole(-1)`로 부모 콘솔에 붙고 출력 코드페이지를
+UTF-8로 바꿔 한글 CLI 출력이 그대로 보인다. 이 경로는 exe로 묶였을 때만(`sys.frozen`)
+동작하므로 WSL에서 소스로 돌리는 테스트에는 영향이 없다.
+
+부모 콘솔이 있어야 하므로 PowerShell에서 바로 부르지 말고 `cmd /c`로 감싼다.
+
+## 실측 (2026-08-04)
+
+빌드 한 번에 성공했고 걸린 시간은 31초, 산출물은 13.7 MiB짜리 `dist/modkit.exe`
+(sha256 `fa5ab2851d32a39d42893be3917005e5bdff482c7bfe2ab9ec5eb07631f01c2a`).
+PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
+생성하는 캐시 모듈이라 실행에 지장이 없다.
+
+스모크 두 가지를 돌렸다.
+
+CLI 쪽은 `cmd /c "modkit.exe shelf --store <빈 폴더>"`가 `보관소가 비어 있어요.`를
+찍고 종료 코드 0으로 끝났다. 한글이 깨지지 않은 것으로 콘솔 붙이기와 코드페이지 전환이
+같이 확인된다.
+
+GUI 쪽은 인자 없이 띄워 10초 뒤 살아 있었고, 창 제목이 `modkit — 모드 관리자`,
+메모리 110MB, WebView2 자식 프로세스 18개였다.
+
+주의할 점 하나. onefile 빌드는 부트로더 프로세스가 실제 앱을 자식으로 띄우기 때문에
+`modkit.exe` 프로세스가 둘 보인다. 창을 가진 쪽은 자식이고, 부모는 메모리 9MB에
+창 핸들이 0이다. 프로세스 하나만 보고 "창이 안 뜬다"고 판단하면 틀린다.
