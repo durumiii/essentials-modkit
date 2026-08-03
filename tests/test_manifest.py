@@ -44,6 +44,25 @@ def test_diagnose_four_verdicts(tmp_path):
     assert "Data/Scripts.rxdata" not in d.foreign              # 아는 변경은 외래가 아니다
 
 
+def test_diagnose_known_via_asset(tmp_path):
+    """에셋 install_to도 known으로 잡힌다 — 스크립트 소유 경로만이 아니다."""
+    from modkit import manifest, modstore
+    game = make_core_game(tmp_path)
+    m = manifest.capture(game, game="Old Game")
+
+    store = tmp_path / "store"
+    put_mod(store, "UI Mod", extra={"assets": [
+        {"file": "ui.png", "install_to": "Graphics/ui.png"},
+    ]})
+    (store / "Old Game" / "UI Mod" / "ui.png").write_bytes(b"asset")
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "ui.png").write_bytes(b"asset-installed")  # 매니페스트엔 없음
+
+    d = manifest.diagnose(game, m, store=store)
+    assert ("Graphics/ui.png", "UI Mod") in d.known
+    assert "Graphics/ui.png" not in d.foreign
+
+
 def test_diagnose_clean(tmp_path):
     from modkit import manifest
     game = make_core_game(tmp_path)
