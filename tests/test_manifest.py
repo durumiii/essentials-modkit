@@ -70,3 +70,18 @@ def test_diagnose_clean(tmp_path):
     d = manifest.diagnose(game, m)
     assert d.foreign == () and d.missing == ()
     assert set(d.intact) == set(m["files"])
+
+
+def test_capture_fills_game_from_title(tmp_path):
+    """game을 안 주면 Game.ini 제목으로 채운다 — 빈 값이면 known 판정이 죽는다."""
+    from modkit import manifest, modstore
+    game = make_core_game(tmp_path)
+    m = manifest.capture(game)                                 # --game 없이
+    assert m["game"] == "Old Game"
+
+    store = tmp_path / "store"
+    put_mod(store, "My Mod")
+    modstore.apply(store, "My Mod", game)
+
+    d = manifest.diagnose(game, m, store=store)
+    assert ("Data/Scripts.rxdata", "My Mod") in d.known

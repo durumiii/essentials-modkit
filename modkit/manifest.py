@@ -39,7 +39,11 @@ def _excluded(rel: str, patterns) -> bool:
 
 
 def capture(game_dir, game="", version="", exclude=None) -> dict:
+    """`game`을 안 주면 설치본 제목으로 채운다 — 빈 값이면 진단의 모드 소유 판정이
+    죽는다(shelf(game="")가 전부 걸러진다)."""
+    from . import gameinfo
     game_dir = Path(game_dir)
+    game = game or gameinfo.read_title(game_dir)
     patterns = tuple(exclude or DEFAULT_EXCLUDE)
     files = {}
     for p in sorted(game_dir.rglob("*")):
@@ -139,19 +143,28 @@ def quarantine(game_dir, rel_paths, at: str | None = None) -> Path:
     return box
 
 
-def restore(game_dir, box: Path) -> list:
-    """격리함 하나를 통째로 원위치한다."""
+def restore(game_dir, box: Path) -> dict:
+    """격리함 하나를 원위치한다.
+
+    되돌릴 자리에 파일이 이미 있으면 덮지 않고 격리함에 남긴다 — 되돌리기가 새 파일을
+    조용히 잡아먹으면 격리가 파괴 동사가 된다. 남긴 것이 있으면 그 가지도 남는다.
+    """
     game_dir, box = Path(game_dir), Path(box)
-    back = []
+    restored, kept = [], []
     for p in sorted(box.rglob("*")):
         if not p.is_file():
             continue
         rel = p.relative_to(box).as_posix()
         dst = game_dir / rel
+        if dst.exists():
+            kept.append(rel)
+            continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         p.rename(dst)
-        back.append(rel)
+        restored.append(rel)
     for d in sorted(box.rglob("*"), reverse=True):
-        d.rmdir()
-    box.rmdir()
-    return back
+        if d.is_dir() and not any(d.iterdir()):
+            d.rmdir()
+    if not any(box.iterdir()):
+        box.rmdir()
+    return {"restored": restored, "kept": kept}
