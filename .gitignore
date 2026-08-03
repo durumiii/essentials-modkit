@@ -5,5 +5,5 @@ build/
 .venv/
 
 # 에이전트 지침·메모리는 공개 repo에 싣지 않는다
-AGENTS.md
-CLAUDE.md
+/AGENTS.md
+/CLAUDE.md
