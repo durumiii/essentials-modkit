@@ -13,11 +13,14 @@ from pathlib import Path
 # 2026-08-04 실측 기반(Wishing Star v21 · 어나더레드 v21.1 · Z v16 대조).
 # fnmatch를 상대경로 전체에 걸므로 `*`가 `/`를 넘는다 — 뿌리 것과 하위 것을 따로 적어야 한다.
 DEFAULT_EXCLUDE = (
-    # 세이브. 코어 SaveData가 데이터 폴더 없으면 "./Game.rxdata"로 떨어뜨린다(WS 실물, 3게임 코드).
+    # 세이브 — Essentials 일반, 세대 무관. 코어 SaveData가 데이터 폴더 없으면
+    # "./Game.rxdata"로 떨어뜨린다(WS 실물 2개 + v21·v21.1·v16 세 게임 코드 경로 동일).
     # 다중 세이브 플러그인이 Game1.rxdata 식으로 슬롯을 늘린다(WS 실물). 뒤에 *를 안 붙이는 건
     # 세이브 백업 Game.rxdata.bak을 BACKUP_SUFFIXES 쪽으로 흘려보내기 위해서다.
     "Game*.rxdata",
-    "*LastSave.dat",        # v16 상태 기록. 뿌리·Data/ 양쪽에 놓인다(Z 코드 실측)
+    # v16 계열 고유 — v21 둘(WS·AR)은 코드도 파일도 0건. Z는 뿌리에 실물이 있고,
+    # Data/ 변형은 읽는 코드(Scene_Intro)만 있고 실물은 미관측이라 보험으로 함께 건다.
+    "*LastSave.dat",
     # OS 부산물 — 관측된 것은 대부분 하위 폴더라 두 형태를 병기한다(WS 7 · AR 5 · Z 6 실물)
     "desktop.ini", "*/desktop.ini",
     "Thumbs.db", "*/Thumbs.db",
@@ -25,7 +28,10 @@ DEFAULT_EXCLUDE = (
     # 스크린샷. v21 코어 pbScreenCapture가 "[%Y-%m-%d] %H_%M_%S.%L.png"로 세이브 옆에 떨군다
     # (WS·AR 코드 동일, 실물 미관측). fnmatch에서 "["는 문자 클래스라 escape해야 한다.
     "[[]????-??-??[]]*.png",
-    "capture*.bmp",         # v16 스크린샷(Z 실물)
+    "capture*.bmp",         # v16 계열 스크린샷(Z 실물). v21 둘에는 이 이름 규칙이 없다
+    # 단일 목록에 세대를 섞어 둔다 — v16 전용 패턴이 v21 게임에서 매치할 실물이 없어 오탐 0.
+    # 반대로 게임 하나에만 있는 것(Z의 Data/Constants.rxdata·Data/MapChecker.dat·showdown.txt)은
+    # 여기 올리지 않는다. Z 전용 목록(pokemon-z/share/make_manifest_full.py)이 맡는다.
     "*.sav",                # 미관측 — mkxp 계열 관례 보험
     # 도구 자신의 산물
     "_quarantine/*", "modkit-log.jsonl", "manifest.json",
