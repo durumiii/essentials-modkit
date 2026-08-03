@@ -444,6 +444,7 @@ def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when
     folder.mkdir(parents=True, exist_ok=True)
     kept_description = _kept(folder / CARD, "description", "")
     kept_assets = _kept(folder / CARD, "assets", [])
+    kept_touches = _kept(folder / CARD, "touches", None)
 
     for stale in folder.glob("*.rb"):
         stale.unlink()  # 다시 꺼낼 때 옛 이름의 파일이 남지 않게
@@ -473,6 +474,7 @@ def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when
                 "baseline_taken": True,
                 "meta": _plain(entry[1]),
                 "assets": kept_assets,
+                "touches": kept_touches or _draft_touches(scripts, kept_assets),
                 "scripts": written,
                 "harvested_from": str(came_from),
             },
@@ -498,6 +500,19 @@ def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when
     )
     _take_baseline(mod, came_from)
     return mod
+
+
+def _draft_touches(scripts, assets) -> dict:
+    """제작자 선언의 초안 — 모드 소스에서 재정의 메서드를, 에셋에서 파일을 뽑는다.
+
+    `modfit.overrides`를 그대로 쓴다(계산 규칙이 두 벌이 되면 어긋난다) — 그게 이미
+    모드 스크립트에서 재정의된 (클래스, 메서드) 쌍을 뽑는 유일한 곳이다.
+    """
+    from . import modfit
+
+    methods = sorted(f"{cls}#{method}" for cls, method in modfit.overrides(scripts))
+    files = sorted(a.get("install_to", "") for a in assets if a.get("install_to"))
+    return {"methods": methods, "files": files}
 
 
 def _take_baseline(mod: "Mod", game_dir: Path) -> None:
