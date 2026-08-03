@@ -29,8 +29,9 @@ def _cmd_diagnose(args) -> int:
     known_by = sorted({name for _, name in diag.known})
     known_desc = f"아는 변경 {len(diag.known)} ({', '.join(known_by)})" if diag.known \
         else "아는 변경 0"
+    untracked_desc = f" · 추적 밖 {len(diag.untracked)}" if diag.untracked else ""
     print(f"원본 일치 {len(diag.intact)} · {known_desc} · "
-          f"외래 {len(diag.foreign)} · 누락 {len(diag.missing)}")
+          f"외래 {len(diag.foreign)} · 누락 {len(diag.missing)}{untracked_desc}")
     if diag.foreign:
         print("외래: " + ", ".join(diag.foreign))
         print("→ --quarantine로 격리하거나, 그대로 두려면 아무것도 안 해도 돼요.")

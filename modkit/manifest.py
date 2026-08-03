@@ -24,6 +24,7 @@ class Diagnosis:
     foreign: tuple
     missing: tuple
     backups: tuple
+    untracked: tuple = ()   # scope="partial"에서 목록 밖 파일 — 판정 대상이 아니다
 
 
 def _crc(path: Path) -> int:
@@ -38,9 +39,13 @@ def _excluded(rel: str, patterns) -> bool:
     return any(fnmatch.fnmatch(rel, p) for p in patterns)
 
 
-def capture(game_dir, game="", version="", exclude=None) -> dict:
+def capture(game_dir, game="", version="", exclude=None, scope="full") -> dict:
     """`game`을 안 주면 설치본 제목으로 채운다 — 빈 값이면 진단의 모드 소유 판정이
-    죽는다(shelf(game="")가 전부 걸러진다)."""
+    죽는다(shelf(game="")가 전부 걸러진다).
+
+    `scope="partial"`은 이 목록이 설치본 전체가 아니라 일부(패치 스테이징 등)라는
+    선언이다 — 진단이 목록 밖 파일을 외래로 몰지 않게 한다.
+    """
     from . import gameinfo
     game_dir = Path(game_dir)
     game = game or gameinfo.read_title(game_dir)
@@ -54,7 +59,7 @@ def capture(game_dir, game="", version="", exclude=None) -> dict:
             continue
         files[rel] = [p.stat().st_size, _crc(p)]
     return {"modkit_manifest": 1, "game": game, "version": version,
-            "exclude": list(patterns), "files": files}
+            "scope": scope, "exclude": list(patterns), "files": files}
 
 
 def save(manifest: dict, path) -> None:
@@ -105,7 +110,8 @@ def diagnose(game_dir, manifest: dict, store=None) -> Diagnosis:
     owned = _owned_paths(store, manifest, game_dir) if store is not None else {}
 
     files = manifest["files"]
-    intact, known, foreign, missing = [], [], [], []
+    partial = manifest.get("scope", "full") == "partial"
+    intact, known, foreign, missing, untracked = [], [], [], [], []
     for rel in sorted(set(files) | set(current)):
         if rel not in current:
             missing.append(rel)
@@ -113,6 +119,8 @@ def diagnose(game_dir, manifest: dict, store=None) -> Diagnosis:
             intact.append(rel)
         elif rel in owned:
             known.append((rel, owned[rel]))
+        elif partial and rel not in files:
+            untracked.append(rel)
         else:
             foreign.append(rel)
 
@@ -122,6 +130,7 @@ def diagnose(game_dir, manifest: dict, store=None) -> Diagnosis:
         foreign=tuple(foreign),
         missing=tuple(missing),
         backups=tuple(sorted(backups)),
+        untracked=tuple(untracked),
     )
 
 

@@ -164,3 +164,24 @@ def test_import_zip_rejects_path_escape(tmp_path):
 
     r = api.import_zip(zpath)
     assert r["ok"] is False
+
+
+def test_diagnose_reports_untracked_count(tmp_path):
+    """부분 매니페스트에서 목록 밖 파일은 개수만 보고되고 격리 대상에서 빠진다."""
+    from modkit import manifest as manifest_mod
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    stage = tmp_path / "stage"
+    (stage / "Data").mkdir(parents=True)
+    (stage / "Data" / "Scripts.rxdata").write_bytes(
+        (game / "Data" / "Scripts.rxdata").read_bytes())
+    made = manifest_mod.capture(stage, game="Old Game", scope="partial")
+    manifest_mod.save(made, game / "manifest.json")
+
+    r = api.diagnose(game)
+    assert r["ok"] is True
+    assert r["foreign"] == []
+    assert r["untracked"] >= 1
+
+    moved = api.quarantine_foreign(game)
+    assert moved == {"ok": True, "moved": 0, "box": ""}

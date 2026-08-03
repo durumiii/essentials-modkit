@@ -89,15 +89,14 @@ class Api:
         try:
             told = manifest.load(manifest_path)
             diag = manifest.diagnose(game_dir, told, store=self.store_dir)
-            # manifest.json 자신은 캡처 이후에 게임 폴더에 놓이는 우리 쪽 부산물이라
-            # DEFAULT_EXCLUDE에 없다 — 외래로 잡히지 않게 여기서 걸러낸다.
             return {
                 "ok": True,
                 "intact": len(diag.intact),
                 "known": [list(pair) for pair in diag.known],
-                "foreign": [f for f in diag.foreign if f != MANIFEST_NAME],
-                "missing": [m for m in diag.missing if m != MANIFEST_NAME],
+                "foreign": list(diag.foreign),
+                "missing": list(diag.missing),
                 "backups": len(diag.backups),
+                "untracked": len(diag.untracked),
             }
         except Exception as err:
             return {"ok": False, "error": str(err)}

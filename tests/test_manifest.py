@@ -99,3 +99,49 @@ def test_bundled_manifest_not_foreign(tmp_path):
     # 재진단하면 foreign이 비어 있어야 한다
     d = manifest.diagnose(game, m)
     assert "manifest.json" not in d.foreign
+
+
+def test_partial_scope_untracked_not_foreign(tmp_path):
+    """부분 매니페스트: 목록 밖 파일은 untracked — 격리 대상(foreign)이 아니다."""
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir(); (game / "Graphics" / "patched.png").write_bytes(b"png")
+
+    stage = tmp_path / "stage" / "Graphics"
+    stage.mkdir(parents=True)
+    (stage / "patched.png").write_bytes(b"png")
+    m = manifest.capture(stage.parent, game="Old Game", scope="partial")
+    assert m["scope"] == "partial"
+
+    d = manifest.diagnose(game, m)
+    assert d.foreign == ()
+    assert "Data/Scripts.rxdata" in d.untracked
+    assert "Graphics/patched.png" in d.intact
+
+
+def test_partial_scope_still_catches_tampered_listed_file(tmp_path):
+    """목록에 있는 파일이 어긋나면 부분 매니페스트에서도 여전히 외래다."""
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir(); (game / "Graphics" / "patched.png").write_bytes(b"png")
+
+    stage = tmp_path / "stage" / "Graphics"
+    stage.mkdir(parents=True)
+    (stage / "patched.png").write_bytes(b"png")
+    m = manifest.capture(stage.parent, game="Old Game", scope="partial")
+
+    (game / "Graphics" / "patched.png").write_bytes(b"OLD PATCH")
+    d = manifest.diagnose(game, m)
+    assert d.foreign == ("Graphics/patched.png",)
+
+
+def test_scope_defaults_to_full(tmp_path):
+    """scope 키가 없는 옛 매니페스트는 full로 읽는다 — 목록 밖은 외래 그대로."""
+    from modkit import manifest
+    game = make_core_game(tmp_path)
+    m = manifest.capture(game, game="Old Game")
+    assert m["scope"] == "full"
+    del m["scope"]
+    (game / "oldpatch.txt").write_bytes(b"trace")
+    d = manifest.diagnose(game, m)
+    assert d.foreign == ("oldpatch.txt",) and d.untracked == ()
