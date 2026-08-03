@@ -36,7 +36,7 @@ UTF-8로 바꿔 한글 CLI 출력이 그대로 보인다. 이 경로는 exe로 �
 ## 실측 (2026-08-04)
 
 빌드 한 번에 성공했고 걸린 시간은 31초, 산출물은 13.7 MiB짜리 `dist/modkit.exe`
-(sha256 `22d154a12bcfa13c3c2bf0f2fc91c40aa1567e6907952cca9125e2421d24f3e5`).
+(sha256 `91c9f4826b4a2b9d9becd69f0545bb0989ccb59411d9500931b1e556273e49e7`).
 매니페스트 scope 도입으로 `app.py`·`web/index.html`이 바뀌어 같은 날 다시 구웠다 —
 크기는 13.7 MiB(14,389,585 바이트) 그대로고 sha256만
 `2544c2287b3a2c1bee9c6d69d7b9ed28b8b595c38e7be7b54badd1cfcb198eb8`로 바뀌었다.
