@@ -80,6 +80,32 @@ def test_lint_catches_install_to_escape(tmp_path):
     assert "install_to" in r.stdout
 
 
+def test_lint_catches_backslash_path_escape_in_script_file(tmp_path):
+    mod = tmp_path / "Backslashy"
+    mod.mkdir()
+    (mod / "mod.json").write_text(json.dumps({
+        "name": "Backslashy",
+        "scripts": [{"file": "..\\evil.rb", "script_name": "evil.rb"}],
+    }), encoding="utf-8")
+    r = run_cli("lint", mod)
+    assert r.returncode == 1
+    assert "scripts[0].file" in r.stdout
+
+
+def test_lint_catches_windows_drive_path_in_install_to(tmp_path):
+    mod = tmp_path / "Drivey"
+    mod.mkdir()
+    (mod / "mod.json").write_text(json.dumps({
+        "name": "Drivey",
+        "scripts": [],
+        "assets": [{"file": "a.png", "install_to": "C:\\Windows\\x"}],
+    }), encoding="utf-8")
+    (mod / "a.png").write_bytes(b"x")
+    r = run_cli("lint", mod)
+    assert r.returncode == 1
+    assert "install_to" in r.stdout
+
+
 def test_lint_missing_mod_json(tmp_path):
     mod = tmp_path / "Empty"
     mod.mkdir()

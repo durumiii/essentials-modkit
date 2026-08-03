@@ -5,6 +5,7 @@
 """
 import argparse
 import json
+import os
 import shutil
 import sys
 from pathlib import Path, PurePosixPath
@@ -22,8 +23,11 @@ def _templates_dir() -> Path:
 
 
 def _escapes(rel: str) -> bool:
-    p = PurePosixPath(rel)
-    return p.is_absolute() or ".." in p.parts
+    """폴더 밖을 가리키는지 — modassets.py의 _inside()와 같은 계열 판정.
+    백슬래시 표기(윈도우 exe에서 실경로로 풀림)도 구분자로 본다."""
+    if os.path.isabs(rel) or (len(rel) > 1 and rel[1] == ":"):
+        return True
+    return ".." in PurePosixPath(rel.replace("\\", "/")).parts
 
 
 def _cmd_new(args) -> int:
