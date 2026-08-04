@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import scripts
+from .modstore import MOD_MARK
 
 BASELINE = "baseline"
 # `class X`·`module X`, 그리고 이름 없는 `class << self`. 셋 다 def를 담는 그릇이다.
@@ -66,11 +67,7 @@ def take_baseline(game_dir: Path | str, mod_scripts, skip: str = "") -> dict:
     if not wanted:
         return {}
 
-    sources = [
-        (name, text)
-        for name, text in scripts.sources(game_dir)
-        if not (skip and name.startswith(f"{skip}/"))
-    ]
+    sources = [one for one in scripts.sources(game_dir) if not _is_mine(one[0], skip)]
     return find_methods(sources, wanted)
 
 
@@ -96,11 +93,7 @@ def check(game_dir: Path | str, mod, skip_self: bool = True, sources=None) -> Fi
         return Fit(verdict=FITS, findings=("게임 코드를 수정하지 않는 모드예요.",), checked=0)
 
     read = scripts.sources(game_dir) if sources is None else sources
-    sources = [
-        (name, text)
-        for name, text in read
-        if not (skip_self and name.startswith(f"{mod.name}/"))
-    ]
+    sources = [one for one in read if not (skip_self and _is_mine(one[0], mod.name))]
 
     now_by_place = find_methods(sources, list(baseline))
 
@@ -210,6 +203,16 @@ def _class_blocks(text: str, name: str = "", singleton: bool = False):
     mine.append(text[at:])
     if name:
         yield _Block(name=name, body="".join(mine), singleton=singleton)
+
+
+def _is_mine(section: str, mod_name: str) -> bool:
+    """이 섹션이 그 모드가 꽂아 둔 것인가.
+
+    묶음형은 섹션 제목이 `<모드명>/<파일>`이고 주입형은 `MOD:<모드명>/<파일>`이다.
+    앞의 표만 보고 걸러서, 주입형으로 이미 얹힌 모드가 제 코드를 원본으로 떠 가고
+    있었다(2026-08-04 실측 — Pokémon Z Fangame의 주입형 모드 6개 전부).
+    """
+    return bool(mod_name) and section.removeprefix(MOD_MARK).startswith(f"{mod_name}/")
 
 
 def _sep(block: _Block, def_match) -> str:

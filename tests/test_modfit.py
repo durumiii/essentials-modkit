@@ -85,3 +85,24 @@ def test_baseline_roundtrip_keeps_singleton_place(tmp_path):
 class _Mod:
     def __init__(self, folder):
         self.folder = folder
+
+
+def test_skip_self_sees_injected_section_names(tmp_path):
+    """주입형으로 얹힌 자기 코드를 원본으로 착각하면 안 된다.
+
+    2026-08-04 실측: 주입기가 꽂는 섹션 제목은 `MOD:<모드명>/<파일>`인데 걸러 내는
+    쪽은 `<모드명>/`으로만 견줘, 이미 얹힌 모드의 기준선이 제 코드로 떠졌다
+    (Pokémon Z Fangame에 설치된 Controller UX Z 등 주입형 6개 전부).
+    """
+    from tests.test_inject import make_core_game
+
+    mine = b"module Input\r\n  class << self\r\n    def update\r\n      mine\r\n    end\r\n  end\r\nend\r\n"
+    core = b"module Input\r\n  class << self\r\n    def update\r\n      core\r\n    end\r\n  end\r\nend\r\n"
+    game = make_core_game(tmp_path, sections=(
+        ("Input_Core", core),
+        ("MOD:Controller UX Z/001_Cursor.rb", mine),  # 이미 얹혀 있는 자기 코드
+    ))
+
+    got = modfit.take_baseline(game, [("001_Cursor.rb", mine.decode())], skip="Controller UX Z")
+    assert "mine" not in got["Input.update"]
+    assert "core" in got["Input.update"]

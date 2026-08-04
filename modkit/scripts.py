@@ -41,12 +41,21 @@ def sources(game_dir: Path | str):
 
     # 한쪽이 안 읽혀도 다른 쪽은 내놓는다 — 코어가 깨졌다고 플러그인까지 못 볼 이유가 없다.
     for entry in _unpack(game_dir / CORE):
-        yield str(entry[1]), _unzip(entry[2])
+        yield _name(entry[1]), _unzip(entry[2])
 
     for entry in _unpack(game_dir / PLUGINS):
-        plugin = str(entry[0])
+        plugin = _name(entry[0])
         for script in entry[2] or []:
             yield f"{plugin}/{script[0]}", _unzip(script[1])
+
+
+def _name(value) -> str:
+    """섹션 제목 — 루비가 쓴 실물은 생 바이트다.
+
+    `str()`로 감싸면 `b'MOD:...'` 꼴 repr이 나온다. 그 상태로는 이름에 견주는 쪽이
+    전부 헛돈다(2026-08-04 실측 — 이미 얹힌 모드를 걸러 내는 검사가 안 먹었다).
+    """
+    return value.decode("utf-8", "replace") if isinstance(value, (bytes, bytearray)) else str(value)
 
 
 def _unpack(path: Path) -> list:
