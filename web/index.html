@@ -79,9 +79,13 @@
 
 <section id=s-mods class="screen">
   <div class=panel>
-    <div style="text-align:center"><img id=mods-banner-img alt="" style="display:none;max-width:100%;max-height:120px;width:auto;border-radius:10px;margin:0 auto 12px"></div>
+    <div id=mods-hero style="display:none;position:relative;border-radius:12px;overflow:hidden;margin-bottom:14px">
+      <img id=mods-banner-img alt="" style="display:block;width:100%;height:170px;object-fit:cover;image-rendering:pixelated">
+      <div id=mods-hero-name style="position:absolute;left:0;right:0;bottom:0;padding:26px 16px 10px;
+        background:linear-gradient(transparent,rgba(0,0,0,.78));font-size:21px;font-weight:800;color:#fff"></div>
+    </div>
+    <p id=mods-game style="display:none;font-size:19px;font-weight:800;margin:0 0 14px"></p>
     <h2>모드 서랍</h2>
-    <p class=sub id=mods-game></p>
     <div id=mods-banner></div>
     <div class=drop id=dropzone>
       zip이나 모드 폴더를 여기로 끌어다 놓거나
@@ -116,7 +120,7 @@
   <div style="max-width:520px;margin:18vh auto 0;background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:22px">
     <h2 id=ask-title>설치 전에 알려 드려요</h2>
-    <div id=ask-body class=foreign-list style="max-height:220px"></div>
+    <div id=ask-body class=foreign-list style="max-height:220px;white-space:pre-line"></div>
     <div class=row>
       <button id=ask-go class=primary>계속 설치</button>
       <button id=ask-no>취소</button>
@@ -247,15 +251,18 @@ function skipDiagnose() { showModsScreen(); }
 
 function showModsScreen(banner) {
   showScreen("s-mods");
-  const img = document.getElementById("mods-banner-img");
+  const hero = document.getElementById("mods-hero");
+  const plain = document.getElementById("mods-game");
   if (currentGame && currentGame.banner) {
-    img.src = currentGame.banner;
-    img.style.display = "block";
+    document.getElementById("mods-banner-img").src = currentGame.banner;
+    document.getElementById("mods-hero-name").textContent = currentGame.label;
+    hero.style.display = "block";
+    plain.style.display = "none";
   } else {
-    img.style.display = "none";
+    hero.style.display = "none";
+    plain.textContent = currentGame ? currentGame.label : "";
+    plain.style.display = currentGame ? "block" : "none";
   }
-  const who = document.getElementById("mods-game");
-  who.textContent = currentGame ? currentGame.label : "";
   document.getElementById("mods-banner").innerHTML = banner
     ? `<div class=banner>${banner}</div>` : "";
   loadMods();
@@ -293,12 +300,21 @@ function loadMods() {
   });
 }
 
+function bullets(lines) {
+  // "본문 — 부연" 꼴은 부연을 들여쓴 하위 불릿으로 내린다.
+  return lines.map(l => {
+    const parts = l.split(" — ");
+    return "\u2022 " + parts[0] + parts.slice(1).map(r => "\n\u00a0\u00a0\u00a0\u00a0\u2013 " + r).join("");
+  }).join("\n");
+}
+
 function ask(lines) {
   // WebView가 confirm()을 그리는지에 기대지 않는다 — 자체 모달로 Promise<bool>.
   return new Promise(resolve => {
     const box = document.getElementById("ask");
+    const tail = lines[lines.length - 1];
     document.getElementById("ask-body").textContent =
-      lines.map(l => l && !l.endsWith("?") ? "\u2022 " + l : l).join("\n");
+      bullets(lines.slice(0, -2)) + "\n\n" + tail;
     box.style.display = "block";
     const done = yes => { box.style.display = "none"; resolve(yes); };
     document.getElementById("ask-go").onclick = () => done(true);
@@ -348,7 +364,7 @@ function doApply(name) {
       return;
     }
     toast(r.warnings && r.warnings.length
-      ? `"${name}" 설치했어요\n\u2022 ` + r.warnings.join("\n\u2022 ")
+      ? `"${name}" 설치했어요\n` + bullets(r.warnings)
       : `"${name}" 설치했어요.`);
     loadMods();
   });
