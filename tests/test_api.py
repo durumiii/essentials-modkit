@@ -16,7 +16,7 @@ def make_api(tmp_path):
 
 def test_recent_round_trip(tmp_path):
     api, store, state = make_api(tmp_path)
-    assert api.recent() == {"ok": True, "paths": []}
+    assert api.recent() == {"ok": True, "paths": [], "more": 0}
 
     r = api.remember(str(tmp_path / "gameA"))
     assert r["ok"] and r["paths"] == [str(tmp_path / "gameA")]
@@ -35,9 +35,11 @@ def test_recent_shows_five_keeps_more(tmp_path):
     api, _, state = make_api(tmp_path)
     for i in range(7):
         api.remember(str(tmp_path / f"game{i}"))
-    shown = api.recent()["paths"]
-    assert len(shown) == 5
-    assert shown[0] == str(tmp_path / "game6")
+    got = api.recent()
+    assert len(got["paths"]) == 5
+    assert got["paths"][0] == str(tmp_path / "game6")
+    assert got["more"] == 2                      # 화면이 "외 2개" 표시·펼침에 쓴다
+    assert len(api.recent(everything=True)["paths"]) == 7
     kept = json.loads(state.read_text(encoding="utf-8"))["recent"]
     assert len(kept) == 7
 

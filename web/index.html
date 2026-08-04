@@ -30,6 +30,7 @@
  .recent-row{display:flex;gap:8px;align-items:stretch}
  .recent-row button.big{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
  .recent-x{flex:none;width:44px;margin-bottom:10px;font-size:17px;color:var(--sub)}
+ .recent-more{width:100%;padding:8px;font-size:13.5px;color:var(--sub);background:none;border:none;cursor:pointer}
  button:disabled{opacity:.5;cursor:default}
  .row{display:flex;gap:10px;flex-wrap:wrap}
  .light{display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:700;
@@ -90,6 +91,7 @@
         background:linear-gradient(transparent,rgba(0,0,0,.78));font-size:21px;font-weight:800;color:#fff"></div>
     </div>
     <p id=mods-game style="display:none;font-size:19px;font-weight:800;margin:0 0 14px"></p>
+    <p id=mods-path class=sub style="display:none;margin:-8px 0 14px;cursor:pointer" title="탐색기에서 열기"></p>
     <h2>모드 서랍</h2>
     <div id=mods-banner></div>
     <div class=drop id=dropzone>
@@ -164,8 +166,8 @@ window.addEventListener("pywebviewready", () => {
   loadRecent();
 });
 
-function loadRecent() {
-  api().recent().then(r => {
+function loadRecent(everything) {
+  api().recent(!!everything).then(r => {
     const box = document.getElementById("recent-list");
     box.innerHTML = "";
     if (!r.ok || !r.paths.length) return;
@@ -185,11 +187,24 @@ function loadRecent() {
       x.className = "recent-x";
       x.textContent = "×";
       x.title = "기록에서 지우기";
-      x.onclick = () => api().forget(p).then(loadRecent);
+      x.onclick = () => api().forget(p).then(() => loadRecent(everything));
       row.appendChild(b);
       row.appendChild(x);
       box.appendChild(row);
     });
+    if (r.more > 0) {
+      const open = document.createElement("button");
+      open.className = "recent-more";
+      open.textContent = `… 외 ${r.more}개 더 보기`;
+      open.onclick = () => loadRecent(true);
+      box.appendChild(open);
+    } else if (everything && r.paths.length > 5) {
+      const close = document.createElement("button");
+      close.className = "recent-more";
+      close.textContent = "접기";
+      close.onclick = () => loadRecent(false);
+      box.appendChild(close);
+    }
   });
 }
 
@@ -287,6 +302,10 @@ function showModsScreen(banner) {
     plain.textContent = currentGame ? currentGame.label : "";
     plain.style.display = currentGame ? "block" : "none";
   }
+  const where = document.getElementById("mods-path");
+  where.textContent = currentPath ? "📁 " + currentPath : "";
+  where.style.display = currentPath ? "block" : "none";
+  where.onclick = () => api().open_path(currentPath);
   document.getElementById("mods-banner").innerHTML = banner
     ? `<div class=banner>${banner}</div>` : "";
   loadMods();

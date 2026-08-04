@@ -76,9 +76,11 @@ class Api:
     RECENT_SHOWN = 5    # 화면에 보여 주는 수 — 기록 자체는 더 길게 남긴다
     RECENT_KEPT = 20
 
-    def recent(self) -> dict:
+    def recent(self, everything=False) -> dict:
         try:
-            return {"ok": True, "paths": self._recent_all()[:self.RECENT_SHOWN]}
+            paths = self._recent_all()
+            shown = paths if everything else paths[:self.RECENT_SHOWN]
+            return {"ok": True, "paths": shown, "more": max(0, len(paths) - len(shown))}
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
