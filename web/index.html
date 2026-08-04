@@ -41,7 +41,7 @@
  .drop{border:2px dashed var(--line);border-radius:12px;padding:22px;text-align:center;
    color:var(--sub);margin-bottom:16px}
  .drop.over{border-color:var(--acc);color:var(--acc)}
- #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);
+ #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);white-space:pre-line;
    border:1px solid var(--warn);color:var(--warn);padding:12px 20px;border-radius:10px;
    font-size:13.5px;display:none;max-width:80%;z-index:20}
  .spin{width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc);
@@ -79,7 +79,7 @@
 
 <section id=s-mods class="screen">
   <div class=panel>
-    <img id=mods-banner-img alt="" style="display:none;width:100%;max-height:150px;object-fit:cover;border-radius:10px;margin-bottom:12px">
+    <div style="text-align:center"><img id=mods-banner-img alt="" style="display:none;max-width:100%;max-height:120px;width:auto;border-radius:10px;margin:0 auto 12px"></div>
     <h2>모드 서랍</h2>
     <p class=sub id=mods-game></p>
     <div id=mods-banner></div>
@@ -95,6 +95,23 @@
 
 </main>
 <div id=toast></div>
+<div id=edit style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30">
+  <div style="max-width:460px;margin:18vh auto 0;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:22px">
+    <h2>모드 정보 수정</h2>
+    <p class=sub>이름표와 게임 소속이에요. 자동으로 채워진 값이라 다듬어도 돼요.</p>
+    <p class=sub style="margin-bottom:4px">모드 이름</p>
+    <input id=edit-name style="width:100%;margin-bottom:12px;padding:10px;border-radius:8px;
+      border:1px solid var(--line);background:var(--card);color:var(--tx);font-family:inherit">
+    <p class=sub style="margin-bottom:4px">게임 (Game.ini의 Title과 같아야 그 게임 서랍에 보여요)</p>
+    <input id=edit-game style="width:100%;margin-bottom:16px;padding:10px;border-radius:8px;
+      border:1px solid var(--line);background:var(--card);color:var(--tx);font-family:inherit">
+    <div class=row>
+      <button id=edit-save class=primary>저장</button>
+      <button id=edit-cancel>취소</button>
+    </div>
+  </div>
+</div>
 <div id=ask style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30">
   <div style="max-width:520px;margin:18vh auto 0;background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:22px">
@@ -238,13 +255,7 @@ function showModsScreen(banner) {
     img.style.display = "none";
   }
   const who = document.getElementById("mods-game");
-  if (currentGame && currentGame.known) {
-    who.textContent = `${currentGame.label} (${currentGame.title})`;
-  } else if (currentGame) {
-    who.textContent = currentGame.title;   // 모르는 게임이라도 이름은 보여 준다
-  } else {
-    who.textContent = "";
-  }
+  who.textContent = currentGame ? currentGame.label : "";
   document.getElementById("mods-banner").innerHTML = banner
     ? `<div class=banner>${banner}</div>` : "";
   loadMods();
@@ -270,7 +281,12 @@ function loadMods() {
         btn.className = "primary";
         btn.onclick = () => applyMod(mod.name);
       }
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "수정";
+      editBtn.title = "이름·게임 소속 수정";
+      editBtn.onclick = () => editMod(mod.name);
       card.appendChild(info);
+      card.appendChild(editBtn);
       card.appendChild(btn);
       box.appendChild(card);
     });
@@ -281,12 +297,31 @@ function ask(lines) {
   // WebView가 confirm()을 그리는지에 기대지 않는다 — 자체 모달로 Promise<bool>.
   return new Promise(resolve => {
     const box = document.getElementById("ask");
-    document.getElementById("ask-body").textContent = lines.join("\n");
+    document.getElementById("ask-body").textContent =
+      lines.map(l => l && !l.endsWith("?") ? "\u2022 " + l : l).join("\n");
     box.style.display = "block";
     const done = yes => { box.style.display = "none"; resolve(yes); };
     document.getElementById("ask-go").onclick = () => done(true);
     document.getElementById("ask-no").onclick = () => done(false);
   });
+}
+
+function editMod(name) {
+  const box = document.getElementById("edit");
+  document.getElementById("edit-name").value = name;
+  document.getElementById("edit-game").value = (currentGame && currentGame.title) || "";
+  box.style.display = "block";
+  document.getElementById("edit-cancel").onclick = () => { box.style.display = "none"; };
+  document.getElementById("edit-save").onclick = () => {
+    const newName = document.getElementById("edit-name").value.trim();
+    const newGame = document.getElementById("edit-game").value.trim();
+    api().edit_mod(name, newName, newGame, currentPath || "").then(r => {
+      box.style.display = "none";
+      if (!r.ok) { toast("수정 실패 — " + r.error); return; }
+      toast(`"${r.name}" (${r.game}) — 저장했어요.`);
+      loadMods();
+    });
+  };
 }
 
 function applyMod(name) {
@@ -313,7 +348,7 @@ function doApply(name) {
       return;
     }
     toast(r.warnings && r.warnings.length
-      ? `"${name}" 설치했어요 — ` + r.warnings.join(" / ")
+      ? `"${name}" 설치했어요\n\u2022 ` + r.warnings.join("\n\u2022 ")
       : `"${name}" 설치했어요.`);
     loadMods();
   });
@@ -377,8 +412,9 @@ window.handleDroppedPaths = dropped => {
 };
 
 const dropzone = document.getElementById("dropzone");
-dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("over"); });
-dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
-dropzone.addEventListener("drop", e => { e.preventDefault(); dropzone.classList.remove("over"); });
+// 실제 드롭은 파이썬 쪽이 문서 전체에서 받는다 — 하이라이트도 문서 전체 드래그에 반응.
+document.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("over"); });
+document.addEventListener("dragleave", e => { if (!e.relatedTarget) dropzone.classList.remove("over"); });
+document.addEventListener("drop", e => { e.preventDefault(); dropzone.classList.remove("over"); });
 </script>
 </body></html>

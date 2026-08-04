@@ -296,6 +296,27 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
     }
 
 
+def reassign(store: Path | str, name: str, game: str) -> dict:
+    """모드를 다른 게임 소속으로 옮긴다 — 보관소 폴더 자리와 카드의 `game`을 함께.
+
+    소속은 얹기 검사(`WrongGame`)와 서랍 표시의 기준이라, 잘못 지어진 소속은
+    사람이 바로잡을 수 있어야 한다(입양이 게임 제목을 자동으로 추정하므로).
+    """
+    store = Path(store)
+    mod = read_mod(store, name)
+    dest = store / _game_folder(game) / mod.folder.name
+    if dest.exists() and dest != mod.folder:
+        raise NameTaken(f"그 게임 서랍에 같은 이름이 이미 있어요: {name}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest != mod.folder:
+        mod.folder.rename(dest)
+    card = dest / CARD
+    told = json.loads(card.read_text(encoding="utf-8"))
+    told["game"] = game
+    card.write_text(json.dumps(told, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return {"name": name, "game": game}
+
+
 def rename(store: Path | str, old: str, new: str, builds=()) -> dict:
     """모드의 이름표를 바꾼다. 설치돼 있는 버전에서는 옛 이름을 걷고 새 이름으로 다시 넣는다.
 

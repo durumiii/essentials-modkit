@@ -290,3 +290,21 @@ def test_preview_apply_reports_overlap_before_install(tmp_path):
     assert p["ok"] and any("Skin A" in w for w in p["warnings"])
     # 미리보기는 아무것도 설치하지 않는다
     assert (game / "Graphics" / "look.png").read_bytes() == b"aaaa"
+
+
+def test_edit_mod_renames_and_reassigns(tmp_path):
+    api, store, state = make_api(tmp_path)
+    folder = store / "Old Game" / "Draft"
+    folder.mkdir(parents=True)
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "Draft", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "a.png", "install_to": "Graphics/a.png"}]}), encoding="utf-8")
+    (folder / "a.png").write_bytes(b"x")
+
+    r = api.edit_mod("Draft", new_name="한글패치 v5.1", new_game="New Game")
+    assert r["ok"] and r["name"] == "한글패치 v5.1" and r["game"] == "New Game"
+
+    from modkit import modstore
+    mod = modstore.read_mod(store, "한글패치 v5.1")
+    assert mod.game == "New Game"
+    assert mod.folder.parent.name == "New Game"

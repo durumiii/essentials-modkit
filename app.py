@@ -159,6 +159,23 @@ class Api:
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
+    def edit_mod(self, name, new_name="", new_game="", game_path="") -> dict:
+        """모드의 이름표와 게임 소속을 사람이 다듬는다 — 입양 기본값은 추정일 뿐이다."""
+        try:
+            final = name
+            if new_name and new_name != name:
+                builds = [game_path] if game_path else []
+                modstore.rename(self.store_dir, name, new_name, builds=builds)
+                final = new_name
+            mod = modstore.read_mod(self.store_dir, final)
+            game = mod.game
+            if new_game and new_game != mod.game:
+                modstore.reassign(self.store_dir, final, new_game)
+                game = new_game
+            return {"ok": True, "name": final, "game": game}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
     def preview_apply(self, path, name) -> dict:
         """설치 전 미리보기 — 아무것도 쓰지 않고 차단 사유·겹침 경고만 계산한다.
 

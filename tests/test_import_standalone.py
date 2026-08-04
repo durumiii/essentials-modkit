@@ -57,4 +57,4 @@ def test_identify_known_game(tmp_path):
     (game / "Game.ini").write_text("[Game]\nTitle=Pokemon Z Fangame\n", encoding="utf-8")
     who = gameinfo.identify(game)
     assert who == {"title": "Pokemon Z Fangame", "known": True,
-                   "label": "포켓몬 Z", "banner": ""}
+                   "label": "Pokémon Z Fangame", "banner": ""}

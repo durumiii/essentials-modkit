@@ -51,7 +51,33 @@ def main() -> int:
           f"sha256 {hashlib.sha256(blob).hexdigest()}")
 
     shutil.rmtree(WORK, ignore_errors=True)
+    sandbox(out)
     return 0
+
+
+# 실기 테스트 샌드박스 — 릴리스마다 새 exe + 순정 게임 사본 + 빈 보관소를 한 폴더에
+# 준비해 둔다(2026-08-04 사용자 요청). 실행은 동봉 bat — MODKIT_STORE를 샌드박스 안
+# `mods/`로 돌려 실보관소(~/.modkit/mods)를 더럽히지 않는다.
+SANDBOX = Path("/mnt/c/Users/durumii/Downloads/Modkit-Test")
+GAME_ZIP = Path("/mnt/c/Users/durumii/Downloads/POKEMON Z V2.18.zip")
+
+
+def sandbox(exe: Path) -> None:
+    import zipfile
+
+    if not GAME_ZIP.is_file():
+        print(f"샌드박스 건너뜀 — 순정 게임 zip이 없어요: {GAME_ZIP}")
+        return
+    shutil.rmtree(SANDBOX, ignore_errors=True)
+    SANDBOX.mkdir(parents=True)
+    with zipfile.ZipFile(GAME_ZIP) as zf:
+        zf.extractall(SANDBOX)  # zip 루트가 "Pokemon Z V2.18" 폴더 하나다
+    shutil.copy2(exe, SANDBOX / "modkit.exe")
+    (SANDBOX / "mods").mkdir()
+    (SANDBOX / "modkit-test.bat").write_text(
+        '@echo off\r\nset "MODKIT_STORE=%~dp0mods"\r\n'
+        'start "" "%~dp0modkit.exe"\r\n', encoding="ascii")
+    print(f"샌드박스 준비: {SANDBOX} (순정 사본 + 빈 mods/ + modkit-test.bat)")
 
 
 if __name__ == "__main__":
