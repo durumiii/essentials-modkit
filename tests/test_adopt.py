@@ -137,3 +137,53 @@ def test_wholesale_rxdata_on_original_base_declares_nothing(tmp_path):
     adopt.adopt(z, game, store)
     card = read_card(store, "Test Game", "tweak")
     assert "requires" not in card
+
+
+def test_adopt_from_folder(tmp_path):
+    """zip이 아니라 풀린 폴더째로도 입양된다 — 야생 배포물은 이미 풀려 있는 경우가 많다."""
+    game, store = make_game(tmp_path), tmp_path / "store"
+    src = tmp_path / "wildfolder"
+    (src / "Graphics" / "Pictures").mkdir(parents=True)
+    (src / "Graphics" / "Pictures" / "types.png").write_bytes(b"PNG-new")
+    (src / "README.txt").write_text("hi", encoding="utf-8")
+
+    got = adopt.adopt(src, game, store)
+    card = read_card(store, "Test Game", "wildfolder")
+    [asset] = card["assets"]
+    assert asset["install_to"] == "Graphics/Pictures/types.png"
+    assert (store / "Test Game" / "wildfolder" / "README.txt").is_file()
+
+
+def test_adopt_folder_with_own_card_ignores_it(tmp_path):
+    """동봉 mod.json은 후보로도 보관물로도 안 쓴다 — 카드는 새로 만들고, 자기가
+    복사한 파일을 기반 후보로 삼는 자기 참조를 막는다(2026-08-04 실물 v5.1 재연)."""
+    game, store = make_game(tmp_path), tmp_path / "store"
+    src = tmp_path / "selfcard"
+    (src / "Data").mkdir(parents=True)
+    mine = rubywrite.dumps([[1, b"A", zlib.compress(b"a = 9\r\n")]])
+    (src / "Data" / "Scripts.rxdata").write_bytes(mine)
+    (src / "mod.json").write_text(json.dumps(
+        {"name": "옛 이름", "game": "Test Game", "scripts": []}), encoding="utf-8")
+
+    got = adopt.adopt(src, game, store)
+    card = read_card(store, "Test Game", "selfcard")
+    assert card["name"] == "selfcard"          # 동봉 카드가 아니라 새 카드
+    assert "requires" not in card              # 자기 자신을 기반으로 잡지 않는다
+    assert "mod.json" not in got.kept
+
+
+def test_identical_store_mod_is_not_a_base(tmp_path):
+    """보관소 모드와 섹션이 완전히 같으면 기반이 아니라 같은 물건이다 — requires 대신 알린다."""
+    game, store = make_game(tmp_path), tmp_path / "store"
+    same = rubywrite.dumps([[1, b"A", zlib.compress(b"a = 9\r\n")]])
+    twin = store / "Test Game" / "쌍둥이"
+    (twin / "Data").mkdir(parents=True)
+    (twin / "Data" / "Scripts.rxdata").write_bytes(same)
+    (twin / "mod.json").write_text(json.dumps(
+        {"name": "쌍둥이", "game": "Test Game", "scripts": []}), encoding="utf-8")
+
+    z = make_zip(tmp_path, [("Data/Scripts.rxdata", same)], name="re-import.zip")
+    got = adopt.adopt(z, game, store)
+    card = read_card(store, "Test Game", "re-import")
+    assert "requires" not in card
+    assert any("쌍둥이" in note and "같은 내용" in note for note in got.notes)

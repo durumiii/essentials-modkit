@@ -82,8 +82,9 @@
     <h2>모드 서랍</h2>
     <div id=mods-banner></div>
     <div class=drop id=dropzone>
-      zip 파일을 여기로 끌어다 놓거나
-      <button onclick="pickZip()">파일 선택</button>
+      zip이나 모드 폴더를 여기로 끌어다 놓거나
+      <button onclick="pickZip()">zip 선택</button>
+      <button onclick="pickModFolder()">폴더 선택</button>
     </div>
     <div id=mods-list></div>
     <button onclick="showScreen('s-folder')">폴더 바꾸기</button>
@@ -277,21 +278,49 @@ function importZip(path) {
   });
 }
 
+function importFolder(path) {
+  api().import_folder(path, currentPath || "").then(r => {
+    if (!r.ok) { toast("폴더 반입 실패 — " + r.error); return; }
+    if (r.adopted) {
+      toast(`"${r.name}" 모드로 입양했어요. 이름과 설명은 나중에 다듬어 주세요.`);
+      (r.notes || []).forEach(n => toast(n));
+    } else {
+      toast(`"${r.name}" 모드를 서랍에 넣었어요.`);
+    }
+    loadMods();
+  });
+}
+
 function pickZip() {
   api().pick_zip().then(r => {
     if (r.ok) importZip(r.path);
   });
 }
 
-// pywebview는 드롭된 File 객체의 실경로를 못 준다 — 드롭 존은 안내용이고
-// 실제 반입은 파일 선택 버튼(pick_zip)으로 처리한다.
+function pickModFolder() {
+  api().pick_folder().then(r => {
+    if (r.ok) importFolder(r.path);
+  });
+}
+
+// pywebview 6은 드롭된 File에 실경로(pywebviewFullPath)를 실어 준다.
+// 없는 환경(옛 판·일부 백엔드)에서는 버튼 폴백을 안내한다.
 const dropzone = document.getElementById("dropzone");
 dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("over"); });
 dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
 dropzone.addEventListener("drop", e => {
   e.preventDefault();
   dropzone.classList.remove("over");
-  toast("드래그앤드롭 경로는 못 읽어요 — 아래 '파일 선택' 버튼을 써 주세요.");
+  const dropped = [...(e.dataTransfer.files || [])];
+  const paths = dropped.map(f => f.pywebviewFullPath).filter(Boolean);
+  if (!paths.length) {
+    toast("드롭 경로를 못 읽었어요 — 아래 선택 버튼을 써 주세요.");
+    return;
+  }
+  paths.forEach(p => {
+    if (p.toLowerCase().endsWith(".zip")) importZip(p);
+    else importFolder(p);   // 폴더(또는 확장자 없는 항목)는 폴더 반입으로
+  });
 });
 </script>
 </body></html>

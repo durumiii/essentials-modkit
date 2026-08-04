@@ -258,8 +258,8 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("--store", type=Path, default=modstore.DEFAULT_STORE)
     p.set_defaults(func=_cmd_harvest)
 
-    p = sub.add_parser("adopt", help="mod.json 없는 zip을 모드로 입양")
-    p.add_argument("zip", type=Path)
+    p = sub.add_parser("adopt", help="mod.json 없는 zip·폴더를 모드로 입양")
+    p.add_argument("zip", metavar="zip_or_folder", type=Path)
     p.add_argument("game_dir", type=Path)
     p.add_argument("--store", type=Path, default=modstore.DEFAULT_STORE)
     p.add_argument("--name", default="")

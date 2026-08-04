@@ -36,17 +36,25 @@ class Adopted:
     notes: tuple      # 통짜 rxdata 판독 결과 등 사람이 읽을 관찰
 
 
-def adopt(zip_path: Path | str, game_dir: Path | str, store: Path | str,
+def adopt(source: Path | str, game_dir: Path | str, store: Path | str,
           name: str = "") -> Adopted:
-    zip_path, game_dir, store = Path(zip_path), Path(game_dir), Path(store)
-    name = name or zip_path.stem
+    """zip 하나 또는 풀린 폴더 하나를 입양한다 — 야생 배포물은 둘 다로 온다."""
+    source, game_dir, store = Path(source), Path(game_dir), Path(store)
+    name = name or source.stem
 
-    with zipfile.ZipFile(zip_path) as zf:
-        members = [n for n in zf.namelist() if not n.endswith("/")]
-        for member in members:
-            if _escapes(member):
-                raise NotAMod(f"경로 탈출 항목이에요: {member}")
-        files = {_unwrap(members)(m): zf.read(m) for m in members}
+    if source.is_dir():
+        members = {str(p.relative_to(source).as_posix()): p.read_bytes()
+                   for p in sorted(source.rglob("*")) if p.is_file()}
+    else:
+        with zipfile.ZipFile(source) as zf:
+            members = {m: zf.read(m) for m in zf.namelist() if not m.endswith("/")}
+    for member in members:
+        if _escapes(member):
+            raise NotAMod(f"경로 탈출 항목이에요: {member}")
+    peel = _unwrap(list(members))
+    # 동봉 mod.json은 안 쓴다 — 카드는 새로 만들고, 옛 카드가 새 카드에 덮이거나
+    # 보관물로 섞이면 어느 쪽이 정본인지 흐려진다.
+    files = {peel(m): body for m, body in members.items() if peel(m) != CARD}
 
     placed, kept = _place(files, game_dir)
     if not placed:
@@ -81,12 +89,12 @@ def adopt(zip_path: Path | str, game_dir: Path | str, store: Path | str,
 
     card = {
         "name": name, "game": game,
-        "description": f"{zip_path.name}에서 입양한 모드예요. 설명은 아직 사람이 안 적었어요.",
+        "description": f"{source.name}에서 입양한 모드예요. 설명은 아직 사람이 안 적었어요.",
         "harvested_at": gameinfo.now(),
         "scripts": [], "assets": assets,
         "touches": _draft_touches([], assets),
     }
-    notes = _wholesale_notes(placed, game_dir, store, _game_folder(game), name, card)
+    notes = _wholesale_notes(placed, game_dir, store, _game_folder(game), folder, card)
     (folder / CARD).write_text(json.dumps(card, ensure_ascii=False, indent=2) + "\n",
                                encoding="utf-8")
     return Adopted(name=name, folder=folder, assets=tuple(assets),
@@ -129,7 +137,7 @@ def _original(game_dir: Path, install_to: str) -> Path | None:
     return target if target.is_file() else None
 
 
-def _wholesale_notes(placed, game_dir, store, game_folder, my_name, card) -> list:
+def _wholesale_notes(placed, game_dir, store, game_folder, my_folder, card) -> list:
     """통짜 rxdata의 실제 발자국 — 기반을 추정해 카드의 requires·order를 채운다."""
     notes = []
     for install_to in WHOLESALE:
@@ -139,13 +147,19 @@ def _wholesale_notes(placed, game_dir, store, game_folder, my_name, card) -> lis
         if original is not None:
             candidates.append(("(원본)", original.read_bytes()))
         for other_card in sorted((store / game_folder).glob(f"*/{CARD}")):
+            if other_card.parent.resolve() == my_folder.resolve():
+                continue  # 방금 자기가 복사한 파일 — 후보로 삼으면 자기 참조가 된다
             other = json.loads(other_card.read_text(encoding="utf-8"))
             shipped = other_card.parent / install_to
-            if other.get("name") != my_name and shipped.is_file():
+            if shipped.is_file():
                 candidates.append((other["name"], shipped.read_bytes()))
         if not candidates:
             continue
         [(base, delta), *rest] = moddiff.find_base(placed[install_to], candidates)
+        if base != "(원본)" and delta.count == 0:
+            # 차이 0은 기반이 아니라 같은 물건이다 — 재반입이나 재배포판일 가능성.
+            notes.append(f"{install_to}: 보관소의 `{base}`와 같은 내용이에요 — 같은 모드의 재반입 같아요")
+            continue
         spots = ", ".join((delta.changed + delta.added + delta.removed)[:10]) or "차이 없음"
         notes.append(f"{install_to}: 기반은 {base} — 다른 섹션 {delta.count}개 ({spots})")
         if base != "(원본)" and base not in card.get("requires", ()):  # 파일 둘이 같은 기반이면 한 번만

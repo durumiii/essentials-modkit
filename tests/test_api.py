@@ -219,3 +219,30 @@ def test_import_zip_without_card_and_game_says_why(tmp_path):
         zf.writestr("Graphics/look.png", b"new")
     r = api.import_zip(zpath)
     assert r["ok"] is False and "게임 폴더" in r["error"]
+
+
+def test_import_folder_with_card_copies(tmp_path):
+    api, store, state = make_api(tmp_path)
+    src = tmp_path / "Ready Mod"
+    src.mkdir()
+    (src / "mod.json").write_text(json.dumps(
+        {"name": "Ready Mod", "game": "Old Game", "scripts": []}), encoding="utf-8")
+    (src / "001_Ready.rb").write_text("def ready\nend\n", encoding="utf-8")
+
+    r = api.import_folder(str(src))
+    assert r == {"ok": True, "name": "Ready Mod"}
+    from modkit import modstore
+    assert (modstore.read_mod(store, "Ready Mod").folder / "001_Ready.rb").is_file()
+
+
+def test_import_folder_without_card_adopts(tmp_path):
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"old")
+    src = tmp_path / "wildfolder"
+    (src / "Graphics").mkdir(parents=True)
+    (src / "Graphics" / "look.png").write_bytes(b"new")
+
+    r = api.import_folder(str(src), str(game))
+    assert r["ok"] and r["adopted"] and r["name"] == "wildfolder"

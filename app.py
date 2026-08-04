@@ -155,6 +155,27 @@ class Api:
         self._log(game_dir, "remove_mod", name)
         return {"ok": True, "did": done["did"], "warnings": []}
 
+    def import_folder(self, folder_path, game_path="") -> dict:
+        """풀린 폴더 반입 — 카드가 있으면 그대로 복사, 없으면 zip과 같은 입양 규칙."""
+        import shutil
+
+        try:
+            src = Path(folder_path)
+            if not src.is_dir():
+                return {"ok": False, "error": "폴더가 아니에요 — zip은 zip 반입으로, 낱개 파일은 폴더에 담아 주세요."}
+            card_path = next(
+                (p for p in [src / "mod.json", *sorted(src.glob("*/mod.json"))] if p.is_file()),
+                None)
+            if card_path is None:
+                return self._adopt_zip(src, game_path)
+            card = json.loads(card_path.read_text(encoding="utf-8"))
+            dest = self.store_dir / modstore._game_folder(card.get("game") or "기타") \
+                / modstore._safe(card["name"])
+            shutil.copytree(card_path.parent, dest, dirs_exist_ok=True)
+            return {"ok": True, "name": card["name"]}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
     def _adopt_zip(self, zip_path, game_path) -> dict:
         from modkit import adopt
 
