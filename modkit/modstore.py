@@ -426,6 +426,14 @@ def _find_folder(store: Path, name: str):
     # 이름의 대괄호가 glob 문자 클래스로 읽히지 않게 이스케이프한다
     for card in sorted(store.glob(f"*/{_glob.escape(safe)}/{CARD}")):
         return card.parent
+    # 폴더 이름과 카드 이름이 어긋난 모드도 찾아진다 — 폴더 하나 때문에 그 모드가
+    # (그리고 shelf를 타는 모든 흐름이) 유령이 되면 안 된다(2026-08-04 실기).
+    for card in sorted(store.glob(f"*/{CARD}")) + sorted(store.glob(f"*/*/{CARD}")):
+        try:
+            if json.loads(card.read_text(encoding="utf-8")).get("name") == name:
+                return card.parent
+        except (json.JSONDecodeError, OSError):
+            continue
     return None
 
 
@@ -434,9 +442,14 @@ def read_mod(store: Path | str, name: str) -> Mod:
     folder = _find_folder(Path(store), name)
     if folder is None:
         raise ModMissing(f"저장된 모드가 아니에요: {name}")
-    card = folder / CARD
+    return _mod_at(folder)
 
-    told = json.loads(card.read_text(encoding="utf-8"))
+
+def _mod_at(folder: Path, told: dict | None = None) -> Mod:
+    """폴더 하나에서 모드를 읽는다 — 이름 해석과 분리해 shelf가 직접 쓴다."""
+    card = folder / CARD
+    if told is None:
+        told = json.loads(card.read_text(encoding="utf-8"))
     scripts = tuple(
         (one["script_name"], _read_keeping_line_ends(folder / one["file"]))
         for one in told["scripts"]
@@ -466,12 +479,17 @@ def shelf(store: Path | str = DEFAULT_STORE, game: str | None = None) -> list:
     store = Path(store)
     if not store.is_dir():
         return []
+    from . import gameinfo as _who
+
     found = []
     for card in sorted(store.glob(f"*/{CARD}")) + sorted(store.glob(f"*/*/{CARD}")):
-        told = json.loads(card.read_text(encoding="utf-8"))
-        mod = read_mod(store, told["name"])
-        from . import gameinfo as _who
-
+        if "_trash" in card.parts:
+            continue
+        try:
+            told = json.loads(card.read_text(encoding="utf-8"))
+            mod = _mod_at(card.parent, told)
+        except Exception:
+            continue  # 깨진 카드 하나가 서랍 전체를 잠그면 안 된다(2026-08-04 실기)
         if game is None or _who.canon(mod.game) == _who.canon(game):
             found.append(mod)
     return found

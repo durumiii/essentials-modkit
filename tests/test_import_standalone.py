@@ -71,3 +71,30 @@ def test_shelf_matches_game_aliases(tmp_path):
     (folder / "mod.json").write_text(json.dumps(
         {"name": "Some Mod", "game": "Pokemon Z Fangame", "scripts": []}), encoding="utf-8")
     assert [m.name for m in modstore.shelf(store, game="Pokemon Z")] == ["Some Mod"]
+
+
+def test_shelf_survives_broken_card(tmp_path):
+    """카드 하나가 이상해도 보관소 전체가 죽으면 안 된다(2026-08-04 실기 — 폴더
+    이름과 카드 이름이 어긋난 모드 하나가 서랍·설치 전부를 잠갔다)."""
+    import json
+    from modkit import modstore
+    store = tmp_path / "store"
+    good = store / "G" / "Good Mod"
+    good.mkdir(parents=True)
+    (good / "mod.json").write_text(json.dumps(
+        {"name": "Good Mod", "game": "G", "scripts": []}), encoding="utf-8")
+    # 폴더 이름 ≠ 카드 이름 — 어긋난 카드
+    odd = store / "G" / "Odd Folder"
+    odd.mkdir()
+    (odd / "mod.json").write_text(json.dumps(
+        {"name": "전혀 다른 이름", "game": "G", "scripts": []}), encoding="utf-8")
+    # 아예 깨진 카드
+    broken = store / "G" / "Broken"
+    broken.mkdir()
+    (broken / "mod.json").write_text("{잘못된 json", encoding="utf-8")
+
+    names = [m.name for m in modstore.shelf(store, game="G")]
+    assert "Good Mod" in names
+    assert "전혀 다른 이름" in names          # 폴더 이름이 달라도 카드로 읽힌다
+    # 이름으로도 찾아진다 — 폴더 탐색이 실패하면 카드 이름을 훑는다
+    assert modstore.read_mod(store, "전혀 다른 이름").folder == odd

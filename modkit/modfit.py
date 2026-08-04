@@ -190,8 +190,15 @@ def _class_blocks(text: str, name: str = "", singleton: bool = False):
         if match.start() < at:  # 이미 안쪽 블록으로 넘긴 구간
             continue
         indent = match.group("indent")
-        closing = text.find(f"\n{indent}end", match.end())
-        stop = len(text) if closing < 0 else closing
+        line_end = text.find("\n", match.end())
+        line_rest = text[match.end():line_end if line_end >= 0 else len(text)]
+        if re.search(r";\s*end\b", line_rest):
+            # `class X < Exception; end` 한 줄짜리 — 제 end를 못 찾으면 뒤 전체를
+            # 삼킨다(실물: Z의 PokeBattle_Battle 안 17만 자가 유령이 됐다).
+            mine.append(text[at:match.start()])
+            at = line_end if line_end >= 0 else len(text)
+            continue
+        stop = _closing(text, match.end(), indent)
         mine.append(text[at:match.start()])
         at = stop
         inner = match.group("name")
@@ -206,13 +213,45 @@ def _class_blocks(text: str, name: str = "", singleton: bool = False):
 
 
 def _is_mine(section: str, mod_name: str) -> bool:
-    """이 섹션이 그 모드가 꽂아 둔 것인가.
+    """이 섹션이 기준선·대조에서 빠져야 하는가.
 
-    묶음형은 섹션 제목이 `<모드명>/<파일>`이고 주입형은 `MOD:<모드명>/<파일>`이다.
-    앞의 표만 보고 걸러서, 주입형으로 이미 얹힌 모드가 제 코드를 원본으로 떠 가고
-    있었다(2026-08-04 실측 — Pokémon Z Fangame의 주입형 모드 6개 전부).
+    **주입 섹션(MOD:*)은 이름을 불문하고 전부 뺀다** — 자기 것만 빼면 옆 모드의
+    재정의를 게임 원문으로 떠 간다(2026-08-04 실기: 모드 4종이 서로의 코드를
+    기준선으로 굳혀 순정에서 전부 차단되고 순환 의존까지 생겼다). 묶음형은 섹션
+    제목이 `<모드명>/<파일>`이라 자기 이름으로 거른다.
     """
-    return bool(mod_name) and section.removeprefix(MOD_MARK).startswith(f"{mod_name}/")
+    if section.startswith(MOD_MARK):
+        return True  # 어떤 모드의 주입이든 게임 원문이 아니다
+    return bool(mod_name) and section.startswith(f"{mod_name}/")
+
+
+_OPENER = None  # 지연 컴파일 — 아래 _closing 참고
+
+
+def _closing(text: str, start: int, indent: str) -> int:
+    """블록의 닫는 `end` 위치 — 같은 들여쓰기의 `end`를 처음 만난 곳이 아니다.
+
+    실물 코어에는 클래스 안에 들여쓰기 0의 `if…end`가 박혀 있다(Z의
+    PokeBattle_Battle 실측 — 그 end에서 끊으면 뒤쪽 메서드 16만 자가 유령이 된다).
+    같은 들여쓰기에서 여는 키워드를 만나면 하나 세고, `end`를 만나면 세어 둔 것부터
+    닫는다. do 블록·heredoc까지는 안 본다 — 같은 들여쓰기 줄만 보는 어림이다.
+    """
+    global _OPENER
+    if _OPENER is None:
+        _OPENER = re.compile(
+            r"^(if|unless|while|until|for|begin|case|def|class|module)\b")
+    depth = 0
+    at = start
+    probe = re.compile(rf"^{re.escape(indent)}(\S.*)$", re.MULTILINE)
+    for line in probe.finditer(text, start):
+        body = line.group(1)
+        if body == "end" or body.startswith(("end ", "end\r")):
+            if depth == 0:
+                return max(start, line.start() - 1)  # 닫는 줄 앞 개행까지가 몸통
+            depth -= 1
+        elif _OPENER.match(body):
+            depth += 1
+    return len(text)
 
 
 def _sep(block: _Block, def_match) -> str:
@@ -261,7 +300,8 @@ def _asset_fit(game_dir: Path, mod) -> Fit:
         backup = target.with_name(target.name + ".orig")
         original = backup if backup.is_file() else target
         if not original.is_file():
-            findings.append(f"{one['install_to']} — 덮을 원본이 게임에 없어요.")
+            # 대응 파일이 없는 자리는 모드가 새로 놓는 자리다 — 판이 바뀐 게 아니다
+            # (하비스트 때 남의 파일 위에서 지문이 새겨진 사고의 방어이기도 하다).
             continue
         running = 0
         with open(original, "rb") as handle:
