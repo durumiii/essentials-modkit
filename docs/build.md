@@ -52,6 +52,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 `755a1ed03eb00a3f7a44f3edadb3227f01042393429a048d00e32cf18b86070c`.
 드롭 실경로 파이썬 배달·보관소 기본 ~/.modkit/mods 판 — sha256
 `5242ba9512ac507b689178aacd6ef8827c5e521cbadd3a6f4152b89fe046fd13`.
+게임 신원 표시·UI 문체판 — sha256
+`9301a2245c73a4050b2213c6461e8791e899f0592dc408507c6ea368f0246f24`.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
