@@ -95,6 +95,17 @@
 
 </main>
 <div id=toast></div>
+<div id=ask style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:30">
+  <div style="max-width:520px;margin:18vh auto 0;background:var(--panel);border:1px solid var(--line);
+    border-radius:14px;padding:22px">
+    <h2 id=ask-title>설치 전에 알려 드려요</h2>
+    <div id=ask-body class=foreign-list style="max-height:220px"></div>
+    <div class=row>
+      <button id=ask-go class=primary>계속 설치</button>
+      <button id=ask-no>취소</button>
+    </div>
+  </div>
+</div>
 
 <script>
 let currentPath = "";
@@ -266,7 +277,35 @@ function loadMods() {
   });
 }
 
+function ask(lines) {
+  // WebView가 confirm()을 그리는지에 기대지 않는다 — 자체 모달로 Promise<bool>.
+  return new Promise(resolve => {
+    const box = document.getElementById("ask");
+    document.getElementById("ask-body").textContent = lines.join("\n");
+    box.style.display = "block";
+    const done = yes => { box.style.display = "none"; resolve(yes); };
+    document.getElementById("ask-go").onclick = () => done(true);
+    document.getElementById("ask-no").onclick = () => done(false);
+  });
+}
+
 function applyMod(name) {
+  api().preview_apply(currentPath, name).then(p => {
+    if (!p.ok) { toast("확인 실패 — " + p.error); return; }
+    if (p.blocked && p.blocked.length) {
+      toast("설치할 수 없어요 — " + p.blocked.join(", "));
+      return;
+    }
+    if (p.warnings && p.warnings.length) {
+      ask([...p.warnings, "", "겹치는 자리는 나중에 설치한 쪽이 이겨요. 계속할까요?"])
+        .then(go => { if (go) doApply(name); });
+    } else {
+      doApply(name);
+    }
+  });
+}
+
+function doApply(name) {
   api().apply_mod(currentPath, name).then(r => {
     if (!r.ok) {
       if (r.blocked) toast("설치할 수 없어요 — " + r.blocked.join(", "));

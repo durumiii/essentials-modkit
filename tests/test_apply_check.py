@@ -57,3 +57,38 @@ def test_apply_passes_when_original_matches(tmp_path):
 
     done = modstore.apply(store, "Skin", game)
     assert done["did"] in ("설치됨", "덮어씀")
+
+
+def put_two_overlapping_asset_mods(tmp_path):
+    import json
+    from tests.test_inject import make_core_game
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"original")
+    store = tmp_path / "store"
+    for name, body in (("Skin A", b"aaaa"), ("Skin B", b"bbbb")):
+        folder = store / "Old Game" / name
+        folder.mkdir(parents=True)
+        (folder / "look.png").write_bytes(body)
+        (folder / "mod.json").write_text(json.dumps(
+            {"name": name, "game": "Old Game", "scripts": [],
+             "assets": [{"file": "look.png", "install_to": "Graphics/look.png"}],
+             "touches": {"methods": [], "files": ["Graphics/look.png"]}}),
+            encoding="utf-8")
+    return game, store
+
+
+def test_present_counts_applied_asset_mods(tmp_path):
+    game, store = put_two_overlapping_asset_mods(tmp_path)
+    assert modstore.present(store, game, game="Old Game") == []
+    modstore.apply(store, "Skin A", game)
+    assert modstore.present(store, game, game="Old Game") == ["Skin A"]
+
+
+def test_apply_warns_on_asset_overlap(tmp_path):
+    """에셋 모드끼리의 겹침도 설치 전에 잡힌다 — 실기에서 GUI·한글패치가 같은 그림을
+    말없이 덮어쓰던 것(2026-08-04). 묶음·주입에 이름이 안 남아 겹침 상대에서 빠져 있었다."""
+    game, store = put_two_overlapping_asset_mods(tmp_path)
+    modstore.apply(store, "Skin A", game)
+    done = modstore.apply(store, "Skin B", game)
+    assert any("Graphics/look.png" in w and "Skin A" in w for w in done["warnings"])

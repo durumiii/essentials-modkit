@@ -81,6 +81,24 @@ class Mod:
 
 # ── 설치본 쪽 ────────────────────────────────────────────────
 
+def present(store: Path | str, game_dir: Path | str, game: str | None = None) -> list:
+    """설치본에 실제로 들어가 있는 모드 이름 — 겹침 판정의 상대 목록.
+
+    `installed`는 묶음·주입 섹션에 이름이 남는 모드만 안다. 에셋 전용 모드는 이름이
+    안 남아 겹침 상대에서 빠졌고, 그래서 같은 그림을 덮는 두 모드가 경고 없이
+    서로를 덮었다(2026-08-04 실기). 파일 대조(`modassets.applied`)로 보탠다.
+    """
+    try:
+        found = installed(game_dir)
+    except NoBundle:
+        found = []
+    for mod in shelf(store, game=game):
+        if mod.name not in found and not mod.scripts and mod.assets \
+                and modassets.applied(mod, game_dir):
+            found.append(mod.name)
+    return found
+
+
 def installed(game_dir: Path | str) -> list:
     """이 설치본에 얹혀 있는 모드 이름을 순서대로.
 
@@ -144,10 +162,7 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
         )
 
     card = json.loads((mod.folder / CARD).read_text(encoding="utf-8"))
-    try:
-        already = installed(game_dir)
-    except NoBundle:
-        already = []  # 아직 아무것도 없는 설치본 — 견줄 상대가 없다
+    already = present(store, game_dir, game=mod.game or here)
     others = [one for one in already if one != mod.name]
     warnings = []
     try:

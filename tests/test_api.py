@@ -276,3 +276,17 @@ def test_mods_marks_asset_mod_installed(tmp_path):
     assert api.apply_mod(str(game), "Skin")["ok"]
     after = api.mods(str(game))
     assert after["available"][0]["installed"] is True
+
+
+def test_preview_apply_reports_overlap_before_install(tmp_path):
+    from tests.test_apply_check import put_two_overlapping_asset_mods
+    api, store, state = make_api(tmp_path)
+    game, store2 = put_two_overlapping_asset_mods(tmp_path)
+    api.store_dir = store2
+    from modkit import modstore
+    modstore.apply(store2, "Skin A", game)
+
+    p = api.preview_apply(str(game), "Skin B")
+    assert p["ok"] and any("Skin A" in w for w in p["warnings"])
+    # 미리보기는 아무것도 설치하지 않는다
+    assert (game / "Graphics" / "look.png").read_bytes() == b"aaaa"

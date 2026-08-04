@@ -60,17 +60,27 @@ def applied(mod, game_dir: Path | str) -> bool:
     return all(matches(source, _inside(game_dir, where)) for source, where in pairs)
 
 
+def _sample(path: Path, size: int = 4096) -> bytes:
+    """파일의 머리·꼬리 표본 — 같은 크기의 다른 내용을 싸게 가른다."""
+    with open(path, "rb") as handle:
+        head = handle.read(size)
+        handle.seek(max(0, path.stat().st_size - size))
+        return head + handle.read(size)
+
+
 def matches(source: Path, target: Path) -> bool:
     """게임의 파일이 보관소의 것과 같은가.
 
-    # ponytail: 크기만 견준다 — 내용까지 읽으면 화면이 폴링할 때마다 수백 MB를 읽는다.
+    # ponytail: 크기 + 머리·꼬리 4KB 표본만 견준다 — 전체를 읽으면 화면이 폴링할
+    # 때마다 수백 MB를 읽는다. 크기만 보던 첫 판은 같은 크기의 다른 그림에 속아
+    # 겹침 판정이 틀렸다(2026-08-04). 표본까지 같은 다른 내용에 속으면 그때 CRC로 올린다.
     예외가 하나 있다: 코어(`Scripts.rxdata`)는 주입 모드가 섹션을 덧붙이므로 크기가
     달라도 **주입 섹션을 걷어낸 나머지**가 같으면 같은 것이다 — 주입이 붙었다고
     한글패치가 빠진 게 아니다.
     """
     try:
         if target.stat().st_size == source.stat().st_size:
-            return True
+            return _sample(target) == _sample(source)
     except OSError:
         return False
     if target.name == "Scripts.rxdata":

@@ -159,6 +159,26 @@ class Api:
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
+    def preview_apply(self, path, name) -> dict:
+        """설치 전 미리보기 — 아무것도 쓰지 않고 차단 사유·겹침 경고만 계산한다.
+
+        touches는 기계로 아는 정보다. 설치 후 통보가 아니라 설치 전에 보여 주고
+        유저가 계속할지 고르게 한다.
+        """
+        try:
+            game_dir = Path(path)
+            mod = modstore.read_mod(self.store_dir, name)
+            card = json.loads((Path(mod.folder) / "mod.json").read_text(encoding="utf-8"))
+            already = modstore.present(self.store_dir, game_dir, game=mod.game or None)
+            others = [one for one in already if one != mod.name]
+            try:
+                warnings = declare.gate(card, others, self.store_dir)
+            except declare.Blocked as no:
+                return {"ok": True, "blocked": no.reasons, "warnings": []}
+            return {"ok": True, "blocked": [], "warnings": warnings}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
     def apply_mod(self, path, name, force=False) -> dict:
         game_dir = Path(path)
         try:
