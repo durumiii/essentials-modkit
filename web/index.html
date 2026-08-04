@@ -113,6 +113,7 @@
     <div class=row>
       <button id=edit-save class=primary>저장</button>
       <button id=edit-cancel>취소</button>
+      <button id=edit-delete class=danger style="margin-left:auto">서랍에서 삭제</button>
     </div>
   </div>
 </div>
@@ -328,6 +329,19 @@ function editMod(name) {
   document.getElementById("edit-game").value = (currentGame && currentGame.title) || "";
   box.style.display = "block";
   document.getElementById("edit-cancel").onclick = () => { box.style.display = "none"; };
+  document.getElementById("edit-delete").onclick = () => {
+    box.style.display = "none";
+    ask([`"${name}" 모드를 서랍에서 삭제해요.`, "",
+         "게임에 설치돼 있으면 먼저 걷어내요. 실물은 보관소의 _trash 폴더로 옮겨요(복구 가능). 계속할까요?"])
+      .then(go => {
+        if (!go) return;
+        api().delete_mod(name, currentPath || "").then(r => {
+          if (!r.ok) { toast("삭제 실패 — " + r.error); return; }
+          toast(`"${name}" 서랍에서 뺐어요 — 실물은 _trash에 있어요.`);
+          loadMods();
+        });
+      });
+  };
   document.getElementById("edit-save").onclick = () => {
     const newName = document.getElementById("edit-name").value.trim();
     const newGame = document.getElementById("edit-game").value.trim();

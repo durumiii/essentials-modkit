@@ -308,3 +308,20 @@ def test_edit_mod_renames_and_reassigns(tmp_path):
     mod = modstore.read_mod(store, "한글패치 v5.1")
     assert mod.game == "New Game"
     assert mod.folder.parent.name == "New Game"
+
+
+def test_delete_mod_moves_to_trash_and_uninstalls(tmp_path):
+    """삭제는 파괴가 아니다 — 게임에서 걷어낸 뒤 보관소 안 _trash로 옮긴다."""
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    put_mod(store, "Doomed")
+    from modkit import modstore
+    modstore.apply(store, "Doomed", game)
+    assert modstore.installed(game) == ["Doomed"]
+
+    r = api.delete_mod("Doomed", str(game))
+    assert r["ok"]
+    assert modstore.installed(game) == []                      # 게임에서 걷힘
+    with pytest.raises(modstore.ModMissing):
+        modstore.read_mod(store, "Doomed")                     # 서랍에서 사라짐
+    assert list((store / "_trash").rglob("mod.json"))          # 실물은 _trash에 남는다

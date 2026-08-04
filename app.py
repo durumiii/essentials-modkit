@@ -176,6 +176,20 @@ class Api:
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
+    def delete_mod(self, name, game_path="") -> dict:
+        """모드를 서랍에서 치운다 — 설치돼 있으면 먼저 걷어내고, 실물은 _trash로 옮긴다."""
+        try:
+            if game_path:
+                try:
+                    if name in modstore.present(self.store_dir, Path(game_path)):
+                        modstore.remove(name, Path(game_path), store=self.store_dir)
+                except Exception:
+                    pass  # 게임 쪽 걷어내기가 안 돼도 서랍 치우기는 진행한다
+            box = modstore.discard(self.store_dir, name)
+            return {"ok": True, "trash": str(box)}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
     def preview_apply(self, path, name) -> dict:
         """설치 전 미리보기 — 아무것도 쓰지 않고 차단 사유·겹침 경고만 계산한다.
 

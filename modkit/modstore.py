@@ -296,6 +296,24 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
     }
 
 
+def discard(store: Path | str, name: str) -> Path:
+    """모드를 서랍에서 치운다 — 지우지 않고 보관소 안 `_trash/<시각>/`으로 옮긴다.
+
+    삭제 대신 격리라는 도구 전체 규율의 서랍판이다. 잘못 치웠으면 폴더를 도로
+    옮기면 된다. `shelf`·`read_mod`는 게임 폴더 두 단계까지만 훑으므로 _trash
+    아래는 서랍에 안 보인다.
+    """
+    from . import gameinfo
+
+    store = Path(store)
+    mod = read_mod(store, name)
+    stamp = gameinfo.now().replace(":", "-")
+    dest = store / "_trash" / stamp / mod.folder.parent.name / mod.folder.name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    mod.folder.rename(dest)
+    return dest
+
+
 def reassign(store: Path | str, name: str, game: str) -> dict:
     """모드를 다른 게임 소속으로 옮긴다 — 보관소 폴더 자리와 카드의 `game`을 함께.
 
