@@ -160,6 +160,53 @@ def test_layered_remove_restores_middle_layer(tmp_path):
     assert leftovers == [], f"층 보관 파일이 남았다: {leftovers}"
 
 
+def test_core_reinstall_is_not_a_layer(tmp_path):
+    """코어 재설치를 남의 층으로 오인하면 제거가 순정 대신 자기 판을 복원한다.
+
+    2026-08-04 실기: merge_core 산출은 뜻-왕복이라 카드 원본과 바이트가 다르다.
+    바이트 비교 층 감지가 그걸 층으로 셸빙(.pre)했고, 제거가 순정(.orig) 대신
+    그 셸빙본을 되살려 코어가 영영 패치판에 머물렀다. 코어는 same_core로 가른다.
+    """
+    import json
+    import zlib
+    from modkit import rubywrite
+    from tests.test_inject import make_core_game
+
+    game = make_core_game(tmp_path)
+    pure = (game / "Data" / "Scripts.rxdata").read_bytes()
+    store = tmp_path / "store"
+    folder = store / "Old Game" / "KR Core"
+    folder.mkdir(parents=True)
+    # 실물 카드 파일은 루비가 쓴 것이라 modkit 재직렬화와 바이트가 다르다 —
+    # 압축 레벨을 달리해 그 어긋남을 재현한다(뜻은 동일).
+    payload = rubywrite.dumps([
+        [1, b"Patched", zlib.compress(b"# kr\r\n", 9)],
+        [2, b"Main", zlib.compress(b"# main\r\n", 9)],
+    ])
+    (folder / "Scripts.rxdata").write_bytes(payload)
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "KR Core", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "Scripts.rxdata", "install_to": "Data/Scripts.rxdata"}]}),
+        encoding="utf-8")
+
+    modstore.apply(store, "KR Core", game, force=True)
+    # 주입 모드가 들어왔다 나가면 코어는 재직렬화된다(뜻-왕복) — 그 상태를 흉내낸다.
+    core = game / "Data" / "Scripts.rxdata"
+    entries = [[n, t, zlib.compress(zlib.decompress(bytes(s)), 0)]
+               for n, t, s in __import__("modkit.rubyread", fromlist=["loads"]).loads(core.read_bytes())]
+    core.write_bytes(rubywrite.dumps(entries))
+    told = core.read_bytes()
+    assert told != payload and len(told) != len(payload)  # 크기까지 다르되 뜻은 같다
+
+    modstore.apply(store, "KR Core", game, force=True)   # 재설치
+    pre_files = list((game / "Data").glob("*.pre-*"))
+    assert pre_files == [], f"재설치가 자기 자신을 층으로 셸빙했다: {pre_files}"
+
+    modstore.remove("KR Core", game, store=store)
+    assert (game / "Data" / "Scripts.rxdata").read_bytes() == pure
+    assert not (game / "Data" / "Scripts.rxdata.orig").exists()
+
+
 def test_remove_keeps_preexisting_identical_file(tmp_path):
     """이미 손패치로 놓여 있던 파일(모드 것과 동일)은 제거해도 살아남아야 한다.
 

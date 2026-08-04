@@ -152,7 +152,10 @@ def install(mod, game_dir: Path | str) -> dict:
 
         if target.is_file() and backup.is_file():
             now = target.read_bytes()
-            if now != backup.read_bytes():
+            self_again = matches(source, target)  # 코어는 same_core — 뜻-왕복 재직렬화가
+            # 자기 재설치를 남의 층으로 보이게 한다(2026-08-04 실기: 제거가 순정 대신
+            # 자기 판을 "복원"해 코어가 영영 패치판에 머물렀다).
+            if now != backup.read_bytes() and not self_again:
                 # 백업(첫 원본)과도 다르면 지금 내용은 다른 모드의 층이다 — 밀어내기
                 # 전에 보관해야 이 모드 제거가 그 층을 되살린다(2026-08-04 실기:
                 # KR 위 GUI를 빼자 겹친 그림이 순정으로 떨어졌다).
