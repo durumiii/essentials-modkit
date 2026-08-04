@@ -105,3 +105,38 @@ def test_force_overrides_wrong_game(tmp_path):
         modstore.apply(store, "Foreign", game)
     done = modstore.apply(store, "Foreign", game, force=True)
     assert any("강행" in w for w in done["warnings"])
+
+
+def test_wholesale_asset_warns_about_wiped_mods(tmp_path):
+    """코어를 통째로 덮는 에셋 모드는 그 안에 살던 주입 모드들을 씻어 낸다 —
+    설치 전에 무엇이 지워지고 무엇이 담겨 오는지 말해야 한다(2026-08-04 실기:
+    한글패치 설치가 말없이 모드 전부를 제거하고 UI Text KR만 심었다)."""
+    import json
+    import zlib
+    from modkit import rubywrite
+    from tests.test_inject import make_core_game, put_mod
+
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "Speed Up")
+    modstore.apply(store, "Speed Up", game)
+    assert modstore.installed(game) == ["Speed Up"]
+
+    # 통째 교체본 — 안에 다른 모드(Embedded)의 주입 섹션이 담겨 있다
+    payload = rubywrite.dumps([
+        [1, b"Main", zlib.compress(b"# main\r\n")],
+        [2, b"MOD:Embedded/001_E.rb", zlib.compress(b"# embedded\r\n")],
+    ])
+    folder = store / "Old Game" / "Big Patch"
+    folder.mkdir(parents=True)
+    (folder / "Scripts.rxdata").write_bytes(payload)
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "Big Patch", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "Scripts.rxdata", "install_to": "Data/Scripts.rxdata"}]}),
+        encoding="utf-8")
+
+    done = modstore.apply(store, "Big Patch", game)
+    wipe = [w for w in done["warnings"] if "Speed Up" in w]
+    ride = [w for w in done["warnings"] if "Embedded" in w]
+    assert wipe and "제거" in wipe[0]
+    assert ride and "함께 설치" in ride[0]

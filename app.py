@@ -229,6 +229,7 @@ class Api:
                 warnings = declare.gate(card, others, self.store_dir)
             except declare.Blocked as no:
                 return {"ok": True, "blocked": no.reasons, "warnings": []}
+            warnings += modstore.wholesale_effects(mod, game_dir)
             return {"ok": True, "blocked": [], "warnings": warnings}
         except Exception as err:
             return {"ok": False, "error": str(err)}

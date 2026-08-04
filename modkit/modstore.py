@@ -100,6 +100,45 @@ def present(store: Path | str, game_dir: Path | str, game: str | None = None) ->
     return found
 
 
+def wholesale_effects(mod, game_dir: Path | str) -> list:
+    """코어·묶음을 통째로 덮는 에셋 모드의 부수 효과 — 사람이 읽을 경고 목록.
+
+    주입 모드는 Scripts.rxdata **안에** 살아서, 그 파일을 통째로 갈아 끼우면 함께
+    씻겨 나간다. 반대로 교체본 안에 담긴 다른 모드의 주입은 함께 실려 들어온다.
+    말없이 일어나면 유저는 모드가 사라진 이유를 알 길이 없다(2026-08-04 실기).
+    """
+    game_dir = Path(game_dir)
+    notes = []
+    for one in getattr(mod, "assets", ()) or ():
+        install_to = one.get("install_to", "").replace("\\", "/")
+        if install_to not in (SCRIPTS, BUNDLE):
+            continue
+        try:
+            current = installed(game_dir)
+        except NoBundle:
+            current = []
+        embedded = []
+        try:
+            for entry in rubyread.loads((Path(mod.folder) / one["file"]).read_bytes()):
+                title = bytes(entry[1]).decode("utf-8", "replace") \
+                    if isinstance(entry[1], (bytes, bytearray)) else str(entry[1])
+                if title.startswith(MOD_MARK):
+                    name = title[len(MOD_MARK):].split("/", 1)[0]
+                    if name not in embedded:
+                        embedded.append(name)
+        except Exception:
+            pass  # 판독 불가면 담긴 모드는 모름 — 씻김 경고만이라도 낸다
+        wiped = [n for n in current if n != mod.name and n not in embedded]
+        if wiped:
+            heads = ", ".join(f"`{n}`" for n in wiped)
+            notes.append(f"{install_to}를 통째로 갈아 끼워요 — 설치돼 있는 {heads}도 "
+                         "함께 제거돼요. 이 모드를 설치한 뒤 다시 설치하면 돌아와요.")
+        for name in embedded:
+            if name != mod.name:
+                notes.append(f"이 모드의 {install_to} 안에 `{name}`의 주입이 담겨 있어요 — 함께 설치돼요.")
+    return notes
+
+
 def installed(game_dir: Path | str) -> list:
     """이 설치본에 얹혀 있는 모드 이름을 순서대로.
 
@@ -193,6 +232,7 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     if not mod.scripts:
         # 스크립트 없이 파일만 갈아 끼우는 모드 — 플러그인 묶음이 없는 게임(포켓몬 Z처럼
         # 옛 엔진)에도 얹을 수 있어야 하므로 묶음은 아예 건드리지 않는다.
+        warnings += wholesale_effects(mod, game_dir)
         did = "덮어씀" if modassets.applied(mod, game_dir) else "설치됨"
         brought = modassets.install(mod, game_dir)
         return {
