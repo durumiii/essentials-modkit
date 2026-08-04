@@ -64,6 +64,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 `ecbebfeaaa07cf88533c3d2785338f095cca954e0c8c93356bd155cc96e01bdb`.
 히어로 배너·불릿 줄바꿈판 — sha256
 `65c314663b852b9154061c39ebfc27f79fb683e18a487197a5d241886e92bc35`.
+경고 집계·순서 침묵·게임 별칭판 — sha256
+`5c2d32c7871c220e433a4b90fbcdd38166c5c30bee25b42d980a2bf629e08d21`.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
