@@ -137,6 +137,22 @@ def test_remove_partial_with_backups_proceeds(tmp_path):
     assert done["did"] == "제거됨"
 
 
+def test_layered_under_counts_as_applied(tmp_path):
+    """층 아래로 밀려난 모드는 '부분'이 아니라 설치됨이다 — 판이 보관돼 있으니까.
+
+    2026-08-04 실기: KR 위에 GUI를 얹자 KR이 179/182 부분으로 표시돼 "한글패치가
+    깨졌나"로 읽혔다(pokemon-z 물음 1). 어긋난 자리의 내 판이 층 보관본(.pre)에
+    온전하면 설치로 센다 — 선언 추측이 아니라 보관 실물 대조.
+    """
+    from modkit import modassets
+    game, store = put_two_overlapping_asset_mods(tmp_path)
+    a = modstore.read_mod(store, "Skin A")
+    modstore.apply(store, "Skin A", game)
+    modstore.apply(store, "Skin B", game, force=True)   # A판이 .pre-Skin B로 보관됨
+    assert modassets.applied_ratio(a, game) == (1, 1)
+    assert modassets.applied(a, game) is True
+
+
 def test_layered_remove_restores_middle_layer(tmp_path):
     """위층을 빼면 아래층으로 돌아온다 — 순정으로 건너뛰지 않는다.
 

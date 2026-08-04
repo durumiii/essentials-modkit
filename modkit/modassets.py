@@ -66,8 +66,24 @@ def applied_ratio(mod, game_dir: Path | str) -> tuple:
     """
     game_dir = Path(game_dir).resolve()
     pairs = declared(mod)
-    matched = sum(1 for source, where in pairs if matches(source, _inside(game_dir, where)))
+    matched = sum(
+        1 for source, where in pairs
+        if matches(source, (target := _inside(game_dir, where))) or _shelved(source, target))
     return matched, len(pairs)
+
+
+def _shelved(source: Path, target: Path) -> bool:
+    """내 판이 층 보관본(.pre-*)에 온전히 있는가 — 위 모드에 덮여도 설치는 산 것이다.
+
+    KR 위에 GUI를 얹자 KR이 '부분 설치'로 표시돼 깨진 걸로 읽혔다(2026-08-04,
+    pokemon-z 물음 1). order 선언 추측이 아니라 보관 실물을 대조한다.
+    """
+    head = target.name + ".pre-"   # glob은 이름의 `[`를 문자 클래스로 읽는다(AGENTS 함정)
+    try:
+        return any(kept.name.startswith(head) and matches(source, kept)
+                   for kept in target.parent.iterdir())
+    except OSError:
+        return False
 
 
 def unbacked_mismatches(mod, game_dir: Path | str) -> list:
