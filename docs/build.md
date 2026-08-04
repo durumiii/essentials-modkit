@@ -76,6 +76,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 `6132b9f64876705535e5f0fc58f4beb045011d74f2e42e961ad2c7de3833c11a`.
 코어 섹션 병합·부분 덮임 표시판 — sha256
 `dc78f9fcf37a9d8a151a4daee1b7d0ddf846ce6a9ede0b7b7b3720b54ddb455e`.
+코어 병합·게임 실행 버튼판 — sha256
+`35a18aa663b51558ef5d347eeabe2c8f04fd4907c3b0ed4bc57c73d6071d811a`.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
