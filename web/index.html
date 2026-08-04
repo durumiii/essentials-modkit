@@ -15,7 +15,9 @@
  .screen.active{display:block}
  .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
-   margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+   margin-bottom:10px;display:flex;align-items:center;gap:12px}
+ .card>div:first-child{flex:1 1 auto;min-width:0}
+ .card>button{flex:none}
  h2{margin:0 0 14px;font-size:16px}
  p.sub{color:var(--sub);font-size:13.5px;margin:0 0 16px}
  button{font-family:inherit;font-size:14.5px;color:var(--tx);background:var(--card);
@@ -48,7 +50,7 @@
    border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:-2px}
  @keyframes spin{to{transform:rotate(360deg)}}
  .name{font-weight:600}
- .desc{color:var(--sub);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+ .desc{color:var(--sub);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 </style></head>
 <body>
 <header><b>modkit</b> — Essentials 팬게임 모드 관리자</header>
@@ -425,6 +427,7 @@ function removeMod(name) {
 }
 
 function importZip(path) {
+  toast("서랍에 넣는 중이에요… (내용을 읽고 자리를 찾아요)");
   api().import_zip(path, currentPath || "").then(r => {
     if (!r.ok) { toast("zip 반입 실패 — " + r.error); return; }
     if (r.adopted) {
@@ -438,6 +441,7 @@ function importZip(path) {
 }
 
 function importFolder(path) {
+  toast("서랍에 넣는 중이에요… (내용을 읽고 자리를 찾아요)");
   api().import_folder(path, currentPath || "").then(r => {
     if (!r.ok) { toast("폴더 반입 실패 — " + r.error); return; }
     if (r.adopted) {

@@ -57,6 +57,38 @@ def shown_name(title: str) -> str:
     return re.sub(r"\bPokemon\b", "Pokémon", title)
 
 
+_JOSA = {"은/는": ("은", "는"), "이/가": ("이", "가"), "을/를": ("을", "를"),
+         "과/와": ("과", "와"), "이에요/예요": ("이에요", "예요")}
+
+
+def josa(word: str, pair: str) -> str:
+    """단어 뒤에 알맞은 조사를 붙인다 — "은(는)" 같은 병기를 화면에서 없앤다."""
+    with_batchim, without = _JOSA[pair]
+    return f"{word}{with_batchim if _batchim(word) else without}"
+
+
+def _batchim(word: str) -> bool:
+    """마지막 글자에 받침이 있는가. 한글은 정확히, 숫자는 표로.
+
+    # ponytail: 영문은 발음 어림이다 — m·n·l·ng 끝은 받침, 그 외는 없음. 짧은
+    # 전부-대문자 약어(KR·LMN류)만 글자 이름(알·엘…)으로 읽어 r·l·m·n을 받침으로.
+    # 묵음 e 같은 진짜 발음 판정이 필요해지면 표기 사전으로 올린다.
+    """
+    token = word.rstrip(" `'\"‘’“”)]}.,!?").split(" ")[-1] if word.strip() else ""
+    token = token.strip("`'\"()[]{}")
+    if not token:
+        return False
+    last = token[-1]
+    if "가" <= last <= "힣":
+        return (ord(last) - 0xAC00) % 28 != 0
+    if last.isdigit():
+        return last in "013678"  # 영·일·삼·육·칠·팔
+    if token.isupper() and len(token) <= 4:
+        return last.lower() in "lmnr"
+    low = token.lower()
+    return low.endswith(("m", "n", "l", "ng"))
+
+
 def canon(title: str) -> str:
     """게임 신원 비교용 정규형 — 별칭(순정 제목 vs 패치가 덮은 제목)을 한 게임으로 본다.
 

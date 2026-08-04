@@ -160,7 +160,8 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     if mod.game and gameinfo.canon(mod.game) != gameinfo.canon(here):
         # 귀속 불일치도 강행 가능하다 — 매니저의 일은 제한이 아니라 정보와
         # 가드레일이고, 백업(.orig)이 되돌릴 길을 지킨다.
-        why = (f"`{mod.name}`은(는) `{mod.game}` 전용 모드예요. 이 게임은 `{here}`예요 — "
+        why = (f"{gameinfo.josa(f'`{mod.name}`', '은/는')} `{mod.game}` 전용 모드예요. "
+               f"이 게임은 {gameinfo.josa(f'`{here}`', '이에요/예요')} — "
                "클래스 이름이 같아도 다른 게임에서는 다른 것을 가리킬 수 있어요.")
         if not force:
             raise WrongGame(why)

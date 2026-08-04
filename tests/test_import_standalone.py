@@ -98,3 +98,15 @@ def test_shelf_survives_broken_card(tmp_path):
     assert "전혀 다른 이름" in names          # 폴더 이름이 달라도 카드로 읽힌다
     # 이름으로도 찾아진다 — 폴더 탐색이 실패하면 카드 이름을 훑는다
     assert modstore.read_mod(store, "전혀 다른 이름").folder == odd
+
+
+def test_josa_picks_particle():
+    from modkit import gameinfo
+    j = gameinfo.josa
+    assert j("모드", "은/는") == "모드는"
+    assert j("한글패치 통합", "은/는") == "한글패치 통합은"
+    assert j("`Battle Speed Z`", "은/는") == "`Battle Speed Z`는"      # Z=지
+    assert j("`UI Text KR`", "은/는") == "`UI Text KR`은"              # KR=케이알
+    assert j("`Frame Profiler`", "은/는") == "`Frame Profiler`는"      # 프로파일러
+    assert j("`Pokemon Z`", "이에요/예요") == "`Pokemon Z`예요"
+    assert j("v1.0.8", "이에요/예요") == "v1.0.8이에요"                # 팔
