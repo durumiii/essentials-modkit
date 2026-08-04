@@ -48,6 +48,12 @@
 | `requires` | 선택(제작자 선언) | 먼저 얹혀 있어야 하는 모드 이름 목록. |
 | `conflicts` | 선택(제작자 선언) | `{모드 이름: 사유}`. 공존 불가 목록. |
 | `from_version`·`from_build`·`harvested_at`·`updated_at`·`baseline_taken` | harvest가 채우는 출처 기록 | 손으로 적는 필드가 아니다. 어느 설치본·언제 꺼냈는지, 원본 기준선을 떴는지를 남긴다. |
+| `version`·`engine`·`install`·`created_at` | 관례(코드 미사용) | 사람이 읽는 참고 정보. 도구는 안 읽지만 모범 카드가 채운다 — `install`은 `"inject"`/`"assets"`, `version`은 판 표기(이름에 날짜를 박지 않기 위한 자리). |
+
+모범 카드의 권장 필드 순서(2026-08-04 확정): `name / game / version / summary /
+description / engine / install / created_at·updated_at / requires / conflicts /
+order / scripts / assets / touches / expects / baseline_taken`. 도구는 순서를
+안 따지지만, 사람이 훑는 카드는 이 순서를 따른다.
 
 design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서도 읽지 않는다
 (`grep -n '"engine"\|"install"' modkit/*.py`가 빈 결과를 낸다). 설치 계약이
