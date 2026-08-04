@@ -325,7 +325,7 @@ function loadMods() {
       card.className = "card";
       const info = document.createElement("div");
       let oneLiner = mod.summary || (mod.description || "").split("\n")[0];
-      if (mod.partial) oneLiner = "일부 파일은 다른 모드가 덮고 있어요 \u00b7 " + oneLiner;
+      if (mod.partial) oneLiner = `파일 ${mod.partial}만 이 모드와 일치해요 — 완전하지 않은 상태예요 \u00b7 ` + oneLiner;
       info.innerHTML = `<div class=name>${mod.name}</div><div class=desc></div>`;
       info.querySelector(".desc").textContent = oneLiner;
       info.querySelector(".desc").title = mod.description || "";  // 긴 설명은 툴팁으로

@@ -135,7 +135,7 @@ def test_apply_and_remove_mod_round_trip(tmp_path):
     got = api.mods(game)
     assert got["ok"] is True
     assert got["installed"] == []
-    assert got["available"] == [{"name": "My Mod", "description": "", "summary": "", "installed": False, "partial": False}]
+    assert got["available"] == [{"name": "My Mod", "description": "", "summary": "", "installed": False, "partial": ""}]
 
     applied = api.apply_mod(game, "My Mod")
     assert applied == {"ok": True, "did": "설치됨", "warnings": []}

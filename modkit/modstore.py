@@ -329,8 +329,16 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
 
     if told is not None and not told.scripts:
         # 파일만 갈아 끼우는 모드 — 묶음에 이름이 없으니 에셋으로 설치 여부를 가른다.
-        if not modassets.applied(told, game_dir):
+        matched, total = modassets.applied_ratio(told, game_dir)
+        if matched == 0:
             raise ModMissing(f"설치돼 있지 않아요: {name}")
+        if matched < total:
+            # 손패치 반쪽 상태 — 백업이 없어 무엇이 이 모드 것인지 모른다. 내용이
+            # 같다고 지우면 순정까지 지운다(2026-08-04 Nova 교훈의 일반형). 출구를 안내.
+            raise ModMissing(
+                f"`{name}`이 반쪽만 들어 있어요(파일 {matched}/{total} 일치) — 무엇이 "
+                "이 모드 것인지 백업이 없어 안전하게 못 빼요. 먼저 한 번 '설치'해서 "
+                "정식 상태로 만들면, 그다음 제거는 깨끗하게 돼요.")
         taken = modassets.remove(told, game_dir)
         return {
             "mod": name,

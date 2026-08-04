@@ -94,6 +94,35 @@ def test_apply_warns_on_asset_overlap(tmp_path):
     assert any("Graphics/look.png" in w and "Skin A" in w for w in done["warnings"])
 
 
+def test_remove_partial_state_guides_instead_of_lying(tmp_path):
+    """반쪽 상태(손패치 41/89류)의 제거는 사유+출구를 말한다 — '설치돼 있지 않다'는 거짓말 금지.
+
+    2026-08-04 아닐 실기: 화면은 부분 일치를 '설치됨'으로 보여 주고, 제거는 전량
+    일치를 요구해 '설치돼 있지 않아요'로 거부 — 같은 상태에 두 잣대였다. 백업이
+    없어 소유를 모르니 안전하게 못 빼는 건 맞고, 출구(설치→정식화→제거)를 안내한다.
+    """
+    import json
+    from tests.test_inject import make_core_game
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "a.png").write_bytes(b"kr")   # 손으로 넣은 절반
+    store = tmp_path / "store"
+    folder = store / "Old Game" / "KR"
+    folder.mkdir(parents=True)
+    (folder / "a.png").write_bytes(b"kr")
+    (folder / "b.png").write_bytes(b"kr2")             # 이건 게임에 없음 → 1/2 부분
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "KR", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "a.png", "install_to": "Graphics/a.png"},
+                    {"file": "b.png", "install_to": "Graphics/b.png"}]}), encoding="utf-8")
+
+    with pytest.raises(modstore.ModMissing) as no:
+        modstore.remove("KR", game, store=store)
+    said = str(no.value)
+    assert "1/2" in said and "설치" in said            # 비율과 출구 안내가 문장에 있다
+    assert "설치돼 있지 않아요" not in said            # 거짓말은 하지 않는다
+
+
 def test_remove_keeps_preexisting_identical_file(tmp_path):
     """이미 손패치로 놓여 있던 파일(모드 것과 동일)은 제거해도 살아남아야 한다.
 
