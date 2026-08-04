@@ -137,6 +137,29 @@ def test_remove_partial_with_backups_proceeds(tmp_path):
     assert done["did"] == "제거됨"
 
 
+def test_layered_remove_restores_middle_layer(tmp_path):
+    """위층을 빼면 아래층으로 돌아온다 — 순정으로 건너뛰지 않는다.
+
+    2026-08-04 실기: KR(층1) 위에 GUI(층2)를 얹었다 빼면, 백업(.orig=순정)만
+    있어서 겹친 그림이 KR판이 아니라 순정으로 떨어졌다. 얹을 때 밀려나는 판을
+    보관해 두면 위층 제거가 아래층을 되살린다.
+    """
+    game, store = put_two_overlapping_asset_mods(tmp_path)
+    target = game / "Graphics" / "look.png"
+
+    modstore.apply(store, "Skin A", game)                # 층1 — .orig(원본) 생성
+    modstore.apply(store, "Skin B", game, force=True)    # 층2 — A판이 밀려남
+    assert target.read_bytes() == b"bbbb"
+
+    modstore.remove("Skin B", game, store=store)
+    assert target.read_bytes() == b"aaaa", "위층 제거가 아래층(A판)을 되살려야 한다"
+
+    modstore.remove("Skin A", game, store=store)
+    assert target.read_bytes() == b"original"            # 층1 제거 → 원본 복귀
+    leftovers = [p.name for p in (game / "Graphics").iterdir() if p.name != "look.png"]
+    assert leftovers == [], f"층 보관 파일이 남았다: {leftovers}"
+
+
 def test_remove_keeps_preexisting_identical_file(tmp_path):
     """이미 손패치로 놓여 있던 파일(모드 것과 동일)은 제거해도 살아남아야 한다.
 

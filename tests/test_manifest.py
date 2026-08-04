@@ -72,6 +72,12 @@ def test_diagnose_four_verdicts(tmp_path):
     assert "Data/Scripts.rxdata.orig" in d.backups
     assert "Data/Scripts.rxdata" not in d.foreign              # 아는 변경은 외래가 아니다
 
+    # 층 보관 파일(.pre-<모드명>)도 도구 자신의 것 — 외래로 몰면 격리가 층을 부순다
+    (game / "Graphics" / "b.png.pre-Skin B").write_bytes(b"layer")
+    d = manifest.diagnose(game, m, store=store)
+    assert "Graphics/b.png.pre-Skin B" not in d.foreign
+    assert "Graphics/b.png.pre-Skin B" in d.backups
+
 
 def test_diagnose_known_via_asset(tmp_path):
     """에셋 install_to도 known으로 잡힌다 — 스크립트 소유 경로만이 아니다."""

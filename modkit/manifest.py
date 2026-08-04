@@ -39,6 +39,12 @@ DEFAULT_EXCLUDE = (
 BACKUP_SUFFIXES = (".orig", ".bak")
 
 
+def _is_backup(rel: str) -> bool:
+    """도구 자신의 백업·층 보관 파일인가 — `.orig`/`.bak` 접미와 `.pre-<모드명>`."""
+    name = rel.rsplit("/", 1)[-1]
+    return rel.endswith(BACKUP_SUFFIXES) or ".pre-" in name
+
+
 @dataclass(frozen=True)
 class Diagnosis:
     intact: tuple
@@ -77,7 +83,7 @@ def capture(game_dir, game="", version="", exclude=None, scope="full") -> dict:
         if not p.is_file():
             continue
         rel = p.relative_to(game_dir).as_posix()
-        if _excluded(rel, patterns) or rel.endswith(BACKUP_SUFFIXES):
+        if _excluded(rel, patterns) or _is_backup(rel):
             continue
         files[rel] = [p.stat().st_size, _crc(p)]
     return {"modkit_manifest": 1, "game": game, "version": version,
@@ -124,7 +130,7 @@ def diagnose(game_dir, manifest: dict, store=None) -> Diagnosis:
         rel = p.relative_to(game_dir).as_posix()
         if _excluded(rel, patterns):
             continue
-        if rel.endswith(BACKUP_SUFFIXES):
+        if _is_backup(rel):
             backups.append(rel)
             continue
         current[rel] = [p.stat().st_size, _crc(p)]

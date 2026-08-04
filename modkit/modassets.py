@@ -150,6 +150,14 @@ def install(mod, game_dir: Path | str) -> dict:
             skipped.append(where)
             continue
 
+        if target.is_file() and backup.is_file():
+            now = target.read_bytes()
+            if now != backup.read_bytes():
+                # 백업(첫 원본)과도 다르면 지금 내용은 다른 모드의 층이다 — 밀어내기
+                # 전에 보관해야 이 모드 제거가 그 층을 되살린다(2026-08-04 실기:
+                # KR 위 GUI를 빼자 겹친 그림이 순정으로 떨어졌다).
+                _put(target.with_name(target.name + f".pre-{mod.name}"), now)
+
         if target.name == "Scripts.rxdata":
             # 코어 통째 교체는 섹션 병합으로 — 살아 있는 주입 모드는 보존하고,
             # 교체본에 실려 온 남의 주입은 뺀다(modstore.merge_core 참고).
@@ -176,7 +184,15 @@ def remove(mod, game_dir: Path | str) -> dict:
     for _, where in declared(mod):
         target = _inside(game_dir, where)
         backup = target.with_name(target.name + BACKUP_SUFFIX)
-        if backup.is_file():
+        shelved = target.with_name(target.name + f".pre-{mod.name}")
+        if shelved.is_file():
+            # 이 모드가 밀어냈던 아래층을 되살린다. 백업(.orig)은 아래층 모드의
+            # 몫이라 그대로 둔다. # ponytail: 역순 제거(아래층 먼저)는 층 표식이
+            # 위층 이름에 매여 있어 못 살린다 — 순서대로 빼는 경우만 정확.
+            _put(target, shelved.read_bytes())
+            shelved.unlink()
+            reverted.append(where)
+        elif backup.is_file():
             blob = backup.read_bytes()
             if target.name == "Scripts.rxdata" and target.is_file():
                 # 원본을 돌려놓되, 이 위에 살던 주입 모드는 도로 꽂아 살린다.
