@@ -112,3 +112,18 @@ def test_lint_missing_mod_json(tmp_path):
     r = run_cli("lint", mod)
     assert r.returncode == 1
     assert "mod.json" in r.stdout
+
+
+def test_lint_rejects_backup_suffix_install(tmp_path, capsys):
+    """install_to가 .orig/.bak로 끝나는 카드는 오류 — 설치가 백업 자리를 덮는다."""
+    import json
+    from modkit.cli import main
+    folder = tmp_path / "Bad Mod"
+    folder.mkdir()
+    (folder / "Scripts.rxdata.orig").write_bytes(b"x")
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "Bad Mod", "game": "G", "scripts": [],
+         "assets": [{"file": "Scripts.rxdata.orig", "install_to": "Data/Scripts.rxdata.orig"}]},
+        ensure_ascii=False), encoding="utf-8")
+    assert main(["lint", str(folder)]) == 1
+    assert "백업" in capsys.readouterr().out

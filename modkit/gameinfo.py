@@ -31,6 +31,9 @@ def read_title(game_dir: Path | str) -> str:
 # 원어에 Pokémon 악센트 접두만 붙인다(shownname.py). 임의 음차를 만들지 않는다.
 # 배너는 각 설치본의 실물 그림(2026-08-04 실측 — 경로·크기·픽셀 확인).
 KNOWN_GAMES = {
+    # 순정 배포판의 Title은 "Pokemon Z"고, "Pokemon Z Fangame"은 한글패치가 덮은
+    # 제목이다(2026-08-04 실측 — 원본 아카이브 Game.ini 대조). 둘 다 받는다.
+    "Pokemon Z": {"label": "포켓몬 Z", "banner": "Graphics/Titles/pokelogo.png"},
     "Pokemon Z Fangame": {"label": "포켓몬 Z", "banner": "Graphics/Titles/pokelogo.png"},
     "Pokemon: Wishing Star": {"label": "소원의 별", "banner": "Graphics/Titles/title.png"},
     "Pokemon: Another Red": {"label": "어나더 레드", "banner": "Graphics/Titles/title.png"},

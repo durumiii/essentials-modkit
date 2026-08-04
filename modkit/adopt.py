@@ -20,6 +20,10 @@ from .modstore import CARD, _draft_touches, _game_folder, _safe
 GAME_ROOTS = {"Data", "Graphics", "Audio", "Fonts", "PBS", "Plugins"}
 GAME_FILES = {"mkxp.json"}
 WHOLESALE = ("Data/Scripts.rxdata", "Data/PluginScripts.rxdata")
+# 패치된 설치본에서 조립된 배포물에는 도구 백업(.orig)이 섞여 온다. 이걸 에셋으로
+# 승격하면 설치가 방금 만든 진짜 백업을 배포 동봉본으로 덮는다(2026-08-04 실기 —
+# Scripts.rxdata.orig.orig가 생기고 재설치가 원본 불일치로 차단됐다).
+BACKUP_SUFFIXES = (".orig", ".bak")
 
 
 class NotAMod(Exception):
@@ -40,7 +44,8 @@ def adopt(source: Path | str, game_dir: Path | str, store: Path | str,
           name: str = "") -> Adopted:
     """zip 하나 또는 풀린 폴더 하나를 입양한다 — 야생 배포물은 둘 다로 온다."""
     source, game_dir, store = Path(source), Path(game_dir), Path(store)
-    name = name or source.stem
+    # 폴더 이름에는 확장자가 없다 — stem을 쓰면 "…v5.1"이 "…v5"로 깎인다(실기 제보).
+    name = name or (source.name if source.is_dir() else source.stem)
 
     if source.is_dir():
         members = {str(p.relative_to(source).as_posix()): p.read_bytes()
@@ -55,6 +60,9 @@ def adopt(source: Path | str, game_dir: Path | str, store: Path | str,
     # 동봉 mod.json은 안 쓴다 — 카드는 새로 만들고, 옛 카드가 새 카드에 덮이거나
     # 보관물로 섞이면 어느 쪽이 정본인지 흐려진다.
     files = {peel(m): body for m, body in members.items() if peel(m) != CARD}
+    backups = sorted(m for m in files if m.endswith(BACKUP_SUFFIXES))
+    for junk in backups:
+        del files[junk]
 
     placed, kept = _place(files, game_dir)
     if not placed:
@@ -95,6 +103,9 @@ def adopt(source: Path | str, game_dir: Path | str, store: Path | str,
         "touches": _draft_touches([], assets),
     }
     notes = _wholesale_notes(placed, game_dir, store, _game_folder(game), folder, card)
+    if backups:
+        notes.append(f"동봉된 백업 파일 {len(backups)}개({', '.join(backups[:3])}"
+                     f"{' 등' if len(backups) > 3 else ''})는 뺐어요 — 도구가 만드는 백업 자리예요.")
     (folder / CARD).write_text(json.dumps(card, ensure_ascii=False, indent=2) + "\n",
                                encoding="utf-8")
     return Adopted(name=name, folder=folder, assets=tuple(assets),

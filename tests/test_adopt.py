@@ -187,3 +187,27 @@ def test_identical_store_mod_is_not_a_base(tmp_path):
     card = read_card(store, "Test Game", "re-import")
     assert "requires" not in card
     assert any("쌍둥이" in note and "같은 내용" in note for note in got.notes)
+
+
+def test_backup_files_are_never_promoted(tmp_path):
+    """배포물에 든 .orig·.bak은 에셋이 아니다 — 승격하면 설치가 도구 자신의 백업
+    자리를 덮는다(2026-08-04 실기: Scripts.rxdata.orig.orig가 생기고 재설치가 차단됐다)."""
+    game, store = make_game(tmp_path), tmp_path / "store"
+    z = make_zip(tmp_path, [("Data/Scripts.rxdata", b"payload"),
+                            ("Data/Scripts.rxdata.orig", b"shipped-backup"),
+                            ("Graphics/Pictures/types.png.bak", b"junk")])
+    got = adopt.adopt(z, game, store)
+    card = read_card(store, "Test Game", "wild")
+    places = [a["install_to"] for a in card["assets"]]
+    assert places == ["Data/Scripts.rxdata"]
+    assert any("백업" in n for n in got.notes)
+
+
+def test_folder_name_keeps_version_dot(tmp_path):
+    """'…v5.1' 폴더가 '…v5'로 깎이면 안 된다 — 폴더 이름엔 확장자가 없다(실기 제보)."""
+    game, store = make_game(tmp_path), tmp_path / "store"
+    src = tmp_path / "한글패치 v5.1"
+    (src / "Graphics" / "Pictures").mkdir(parents=True)
+    (src / "Graphics" / "Pictures" / "types.png").write_bytes(b"x")
+    got = adopt.adopt(src, game, store)
+    assert got.name == "한글패치 v5.1"

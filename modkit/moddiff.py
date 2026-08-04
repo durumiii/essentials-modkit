@@ -32,7 +32,10 @@ def sections(blob: bytes) -> dict:
     실물 코어에는 같은 제목(구분선 섹션)이 되풀이된다 — 두 번째부터 `@2`, `@3`을
     붙여 순서로 짝을 맞춘다.
     """
-    entries = rubyread.loads(blob)
+    try:
+        entries = rubyread.loads(blob)
+    except Exception:
+        return {}  # Marshal이 아니거나 깨진 파일 — 판독 불가는 "차이 모름"이지 사고가 아니다
     if not isinstance(entries, list):
         return {}
     found = {}

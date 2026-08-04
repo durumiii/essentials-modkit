@@ -115,6 +115,8 @@ def _cmd_lint(args) -> int:
         install_to = a.get("install_to")
         if install_to and _escapes(install_to):
             errors.append(f"오류 · mod.json:assets[{i}].install_to — 절대경로거나 상위로 나가요 — 게임 폴더 기준 상대경로만 써요")
+        elif install_to and install_to.endswith((".orig", ".bak")):
+            errors.append(f"오류 · mod.json:assets[{i}].install_to — 백업 자리(.orig/.bak)를 덮어요 — 도구가 만드는 백업이라 설치 대상이 될 수 없어요")
 
     order = card.get("order") or {}
     if name and name in (card.get("requires") or []):
