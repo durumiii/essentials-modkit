@@ -193,3 +193,29 @@ def test_game_status_flags_non_game_folder(tmp_path):
     (tmp_path / "notgame").mkdir()
     s = api.game_status(str(tmp_path / "notgame"))
     assert s["ok"] and s["looks_like_game"] is False
+
+
+def test_import_zip_without_card_adopts(tmp_path):
+    """카드 없는 zip(야생 표준형)은 게임 폴더 기준으로 입양된다."""
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"old")
+    zpath = tmp_path / "wildskin.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("Graphics/look.png", b"new")
+
+    r = api.import_zip(zpath, str(game))
+    assert r["ok"] and r["adopted"] and r["name"] == "wildskin"
+
+    from modkit import modstore
+    assert modstore.read_mod(store, "wildskin").game == "Old Game"
+
+
+def test_import_zip_without_card_and_game_says_why(tmp_path):
+    api, store, state = make_api(tmp_path)
+    zpath = tmp_path / "wild.zip"
+    with zipfile.ZipFile(zpath, "w") as zf:
+        zf.writestr("Graphics/look.png", b"new")
+    r = api.import_zip(zpath)
+    assert r["ok"] is False and "게임 폴더" in r["error"]

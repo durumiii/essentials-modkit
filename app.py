@@ -155,7 +155,23 @@ class Api:
         self._log(game_dir, "remove_mod", name)
         return {"ok": True, "did": done["did"], "warnings": []}
 
-    def import_zip(self, zip_path) -> dict:
+    def _adopt_zip(self, zip_path, game_path) -> dict:
+        from modkit import adopt
+
+        if not game_path:
+            return {"ok": False,
+                    "error": "mod.json이 없는 zip이에요 — 게임 폴더를 먼저 연 뒤 반입하면 "
+                             "모드로 입양할 수 있어요."}
+        try:
+            got = adopt.adopt(zip_path, game_path, self.store_dir)
+        except adopt.NotAMod as no:
+            return {"ok": False, "error": str(no)}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+        return {"ok": True, "name": got.name, "adopted": True,
+                "notes": list(got.notes) + list(got.warnings)}
+
+    def import_zip(self, zip_path, game_path="") -> dict:
         try:
             with zipfile.ZipFile(zip_path) as zf:
                 names = [n for n in zf.namelist() if not n.endswith("/")]
@@ -168,7 +184,8 @@ class Api:
                      if PurePosixPath(n).name == "mod.json" and len(PurePosixPath(n).parts) <= 2),
                     None)
                 if card_name is None:
-                    return {"ok": False, "error": "mod.json을 못 찾았어요 — zip 루트나 한 단계 아래에 있어야 해요."}
+                    # 야생 배포물의 표준형이다 — 카드 없는 zip은 입양 규칙으로 받는다.
+                    return self._adopt_zip(zip_path, game_path)
 
                 card = json.loads(zf.read(card_name))
                 mod_name = card["name"]

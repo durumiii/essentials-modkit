@@ -250,9 +250,14 @@ function removeMod(name) {
 }
 
 function importZip(path) {
-  api().import_zip(path).then(r => {
+  api().import_zip(path, currentPath || "").then(r => {
     if (!r.ok) { toast("zip 반입 실패 — " + r.error); return; }
-    toast(`"${r.name}" 모드를 서랍에 넣었어요.`);
+    if (r.adopted) {
+      toast(`"${r.name}" 모드로 입양했어요. 이름과 설명은 나중에 다듬어 주세요.`);
+      (r.notes || []).forEach(n => toast(n));
+    } else {
+      toast(`"${r.name}" 모드를 서랍에 넣었어요.`);
+    }
     loadMods();
   });
 }

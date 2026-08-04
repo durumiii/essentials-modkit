@@ -155,6 +155,19 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
             raise
         warnings = [f"강행: {why}" for why in no.reasons]
 
+    # 얹기 전 호환 판정 — 게임이 판 올림으로 원본을 고쳤는데 모드가 낡은 것을
+    # 되살리는 사고를 여기서 막는다. fits·unknown은 조용히 지나간다(unknown은
+    # 기준선 없는 옛 카드가 많아 경고로 올리면 소음이 된다).
+    from . import modfit
+
+    fit = modfit.check(game_dir, mod)
+    if fit.verdict == modfit.CHANGED:
+        if not force:
+            raise BaseChanged(
+                "이 게임 판과 안 맞아요 — 얹으면 낡은 코드가 되살아나요:\n"
+                + "\n".join(fit.findings))
+        warnings += [f"강행: {why}" for why in fit.findings]
+
     if not mod.scripts:
         # 스크립트 없이 파일만 갈아 끼우는 모드 — 플러그인 묶음이 없는 게임(포켓몬 Z처럼
         # 옛 엔진)에도 얹을 수 있어야 하므로 묶음은 아예 건드리지 않는다.
