@@ -150,12 +150,15 @@ class Api:
             available = []
             for mod in modstore.shelf(self.store_dir, game=title):
                 on = mod.name in installed
+                partial = False
                 if not on and not mod.scripts and mod.assets:
                     # 에셋 전용 모드는 묶음·주입 섹션에 이름이 안 남는다 — 파일로 답한다.
-                    on = modassets.applied(mod, game_dir)
+                    matched, total = modassets.applied_ratio(mod, game_dir)
+                    on = matched > 0
+                    partial = 0 < matched < total  # 다른 모드가 일부 파일을 덮은 상태
                 available.append(
                     {"name": mod.name, "description": mod.description,
-                     "summary": mod.summary, "installed": on})
+                     "summary": mod.summary, "installed": on, "partial": partial})
             return {"ok": True, "installed": installed, "available": available}
         except Exception as err:
             return {"ok": False, "error": str(err)}

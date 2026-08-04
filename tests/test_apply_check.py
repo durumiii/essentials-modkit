@@ -136,7 +136,69 @@ def test_wholesale_asset_warns_about_wiped_mods(tmp_path):
         encoding="utf-8")
 
     done = modstore.apply(store, "Big Patch", game)
-    wipe = [w for w in done["warnings"] if "Speed Up" in w]
+    # 코어는 병합이라 Speed Up이 살아남고, 실려 온 Embedded는 빠진다는 안내가 온다
+    assert "Speed Up" in modstore.installed(game)
     ride = [w for w in done["warnings"] if "Embedded" in w]
-    assert wipe and "제거" in wipe[0]
-    assert ride and "함께 설치" in ride[0]
+    assert ride and "빼고 설치" in ride[0]
+
+
+def test_wholesale_core_merge_preserves_injected_mods(tmp_path):
+    """코어 통째 교체 에셋은 섹션 병합으로 들어간다 — 살아 있는 주입 모드는 보존하고,
+    교체본에 실려 온 남의 주입은 뺀다. 통째 교체가 야생의 기본값이라도, 충돌 없이
+    설치·제거하자고 만든 도구가 모드 전멸을 기본 동작으로 둘 수는 없다(2026-08-04)."""
+    import json
+    import zlib
+    from modkit import rubywrite
+    from tests.test_inject import make_core_game, put_mod
+
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "Speed Up")
+    modstore.apply(store, "Speed Up", game)
+
+    payload = rubywrite.dumps([
+        [1, b"Translated", zlib.compress(b"# kr\r\n")],
+        [2, b"Main", zlib.compress(b"# main\r\n")],
+        [3, b"MOD:Rider/001_R.rb", zlib.compress(b"# rider\r\n")],
+    ])
+    folder = store / "Old Game" / "KR Patch"
+    folder.mkdir(parents=True)
+    (folder / "Scripts.rxdata").write_bytes(payload)
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "KR Patch", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "Scripts.rxdata", "install_to": "Data/Scripts.rxdata"}]}),
+        encoding="utf-8")
+
+    modstore.apply(store, "KR Patch", game, force=True)
+    now = modstore.installed(game)
+    assert "Speed Up" in now                 # 살아 있는 주입은 보존된다
+    assert "Rider" not in now                # 실려 온 남의 주입은 안 들어온다
+    # 병합돼도 '설치됨' 판정은 유지된다 (주입 걷어낸 뼈대 비교)
+    from modkit import modassets
+    assert modassets.applied(modstore.read_mod(store, "KR Patch"), game)
+
+
+def test_wholesale_core_remove_preserves_injected_mods(tmp_path):
+    """통째 교체 에셋을 제거할 때도 그 뒤에 설치된 주입 모드는 살아남는다."""
+    import json
+    import zlib
+    from modkit import rubywrite
+    from tests.test_inject import make_core_game, put_mod
+
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    payload = rubywrite.dumps([[1, b"Main", zlib.compress(b"# kr main\r\n")]])
+    folder = store / "Old Game" / "KR Patch"
+    folder.mkdir(parents=True)
+    (folder / "Scripts.rxdata").write_bytes(payload)
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "KR Patch", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "Scripts.rxdata", "install_to": "Data/Scripts.rxdata"}]}),
+        encoding="utf-8")
+    modstore.apply(store, "KR Patch", game, force=True)
+    put_mod(store, "Speed Up")
+    modstore.apply(store, "Speed Up", game)   # 패치 위에 주입 모드
+    assert modstore.installed(game) == ["Speed Up"]
+
+    modstore.remove("KR Patch", game, store=store)
+    assert "Speed Up" in modstore.installed(game)   # 원본 복원 후에도 주입은 남는다

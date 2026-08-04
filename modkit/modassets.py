@@ -53,11 +53,20 @@ def applied(mod, game_dir: Path | str) -> bool:
     # ponytail: 크기만 견준다 — 내용까지 읽으면 화면이 폴링할 때마다 수백 MB를 읽는다.
     # 크기가 같은 다른 내용에 속으면 그때 CRC 대조로 올린다.
     """
+    matched, total = applied_ratio(mod, game_dir)
+    return total > 0 and matched == total
+
+
+def applied_ratio(mod, game_dir: Path | str) -> tuple:
+    """(일치한 에셋 수, 전체 수) — 다른 모드가 일부를 덮으면 '부분 설치'로 보인다.
+
+    전량 일치만 설치로 치던 첫 판은, 그림 몇 장을 덮는 모드 하나에 한글패치가
+    "사일런트 제거"된 것처럼 보였다(2026-08-04 실기 — 실제로는 다 살아 있었다).
+    """
     game_dir = Path(game_dir).resolve()
     pairs = declared(mod)
-    if not pairs:
-        return False
-    return all(matches(source, _inside(game_dir, where)) for source, where in pairs)
+    matched = sum(1 for source, where in pairs if matches(source, _inside(game_dir, where)))
+    return matched, len(pairs)
 
 
 def _sample(path: Path, size: int = 4096) -> bytes:
@@ -109,6 +118,17 @@ def install(mod, game_dir: Path | str) -> dict:
             shutil.copy2(target, backup)  # 게임이 원래 들고 있던 것
             backed_up.append(where)
 
+        if target.name == "Scripts.rxdata":
+            # 코어 통째 교체는 섹션 병합으로 — 살아 있는 주입 모드는 보존하고,
+            # 교체본에 실려 온 남의 주입은 뺀다(modstore.merge_core 참고).
+            from . import modstore
+
+            merged = modstore.merge_core(
+                source.read_bytes(), target.read_bytes() if target.is_file() else None)
+            _put(target, merged)
+            written.append(where)
+            continue
+
         target.parent.mkdir(parents=True, exist_ok=True)
         _put(target, source.read_bytes())
         written.append(where)
@@ -125,7 +145,13 @@ def remove(mod, game_dir: Path | str) -> dict:
         target = _inside(game_dir, where)
         backup = target.with_name(target.name + BACKUP_SUFFIX)
         if backup.is_file():
-            _put(target, backup.read_bytes())
+            blob = backup.read_bytes()
+            if target.name == "Scripts.rxdata" and target.is_file():
+                # 원본을 돌려놓되, 이 위에 살던 주입 모드는 도로 꽂아 살린다.
+                from . import modstore
+
+                blob = modstore.merge_core(blob, target.read_bytes())
+            _put(target, blob)
             backup.unlink()
             reverted.append(where)
         elif target.is_file():

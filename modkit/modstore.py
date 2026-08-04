@@ -94,9 +94,10 @@ def present(store: Path | str, game_dir: Path | str, game: str | None = None) ->
     except NoBundle:
         found = []
     for mod in shelf(store, game=game):
-        if mod.name not in found and not mod.scripts and mod.assets \
-                and modassets.applied(mod, game_dir):
-            found.append(mod.name)
+        if mod.name not in found and not mod.scripts and mod.assets:
+            matched, total = modassets.applied_ratio(mod, game_dir)
+            if matched:  # 일부가 다른 모드에 덮였어도 이 모드는 게임에 있다
+                found.append(mod.name)
     return found
 
 
@@ -128,6 +129,14 @@ def wholesale_effects(mod, game_dir: Path | str) -> list:
                         embedded.append(name)
         except Exception:
             pass  # 판독 불가면 담긴 모드는 모름 — 씻김 경고만이라도 낸다
+        if install_to == SCRIPTS:
+            # 코어는 섹션 병합으로 들어간다 — 살아 있는 주입은 보존되고, 실려 온
+            # 남의 주입은 뺀다. 유저에게는 후자만 알리면 된다.
+            for name in embedded:
+                if name != mod.name:
+                    notes.append(f"교체본에 담긴 `{name}`의 주입은 빼고 설치해요 — "
+                                 f"`{name}`이 필요하면 서랍에서 따로 설치해 주세요.")
+            continue
         wiped = [n for n in current if n != mod.name and n not in embedded]
         if wiped:
             heads = ", ".join(f"`{n}`" for n in wiped)
@@ -779,6 +788,33 @@ def _uninject(mod: Mod, game_dir: Path) -> dict:
 
 
 _core_memo: dict = {}
+
+
+def merge_core(payload: bytes, current: bytes | None) -> bytes:
+    """코어 통째 교체본을 섹션 병합으로 바꾼다.
+
+    통째 교체는 야생 배포의 기본값이지만, 그대로 쓰면 코어 안에 사는 주입 모드가
+    전멸한다(2026-08-04 실기 — 한글패치 설치가 말없이 모드 전부를 걷어냈다).
+    규칙 둘: 게임에 살아 있는 주입(MOD:) 섹션은 Main 앞에 도로 꽂아 보존하고,
+    교체본에 실려 온 남의 주입 섹션은 뺀다(조립 흔적이 유저 모르게 설치되는 것 방지).
+    """
+    from . import rubywrite
+
+    def title(entry) -> str:
+        return bytes(entry[1]).decode("utf-8", "replace") \
+            if isinstance(entry[1], (bytes, bytearray)) else str(entry[1])
+
+    base = [e for e in rubyread.loads(payload) if not title(e).startswith(MOD_MARK)]
+    riders = []
+    if current is not None:
+        try:
+            riders = [e for e in rubyread.loads(current) if title(e).startswith(MOD_MARK)]
+        except Exception:
+            riders = []  # 지금 코어가 못 읽히면 보존할 주입도 읽을 수 없다
+    if riders:
+        main_at = next((i for i, e in enumerate(base) if title(e) == "Main"), len(base))
+        base = base[:main_at] + riders + base[main_at:]
+    return rubywrite.dumps(base)
 
 
 def same_core(source: Path, target: Path) -> bool:
