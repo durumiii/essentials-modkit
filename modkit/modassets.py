@@ -14,8 +14,9 @@ nil을 돌려주고, 잘 짠 플러그인은 거기서 그 표시만 건너뛴�
 
 지키는 것 넷.
 
-  - **덮은 자리에만 백업을 남긴다**(`.orig`). 새로 놓은 자리는 그냥 지우면 되고, 덮은 자리는
-    되돌릴 것이 있다. 둘을 가르는 표시가 백업의 유무다.
+  - **이미 있던 자리에는 백업을 남긴다**(`.orig`) — 내용이 모드 것과 같아도. 새로 놓은
+    자리는 그냥 지우면 되고, 있던 자리는 되돌릴 것이 있다. 둘을 가르는 표시가 백업의
+    유무라서, 같다고 백업을 거르면 제거가 손패치 실물을 지운다(2026-08-04 Nova).
   - **두 번 설치해도 백업은 처음 것 그대로.** 두 번째가 첫 결과를 원본으로 뜨면 되돌릴 데가
     사라진다.
   - **제자리에서 고치지 않는다.** 버전끼리 하드링크로 이어져 있어 함께 바뀐다. 옆에 쓰고
@@ -109,14 +110,16 @@ def install(mod, game_dir: Path | str) -> dict:
         if not source.is_file():
             raise AssetMissing(f"`{mod.name}`이 가져올 파일이 보관소에 없어요: {source}")
 
-        if target.is_file() and target.read_bytes() == source.read_bytes():
-            skipped.append(where)
-            continue
-
         backup = target.with_name(target.name + BACKUP_SUFFIX)
         if target.is_file() and not backup.exists():
             shutil.copy2(target, backup)  # 게임이 원래 들고 있던 것
             backed_up.append(where)
+
+        if target.is_file() and target.read_bytes() == source.read_bytes():
+            # 내용이 같아도 백업은 남긴다 — 백업 없는 자리를 제거가 "내가 새로 놓은
+            # 것"으로 읽어, 손패치로 있던 실물을 지웠다(2026-08-04 Nova 실기).
+            skipped.append(where)
+            continue
 
         if target.name == "Scripts.rxdata":
             # 코어 통째 교체는 섹션 병합으로 — 살아 있는 주입 모드는 보존하고,

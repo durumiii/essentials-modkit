@@ -94,6 +94,22 @@ def test_apply_warns_on_asset_overlap(tmp_path):
     assert any("Graphics/look.png" in w and "Skin A" in w for w in done["warnings"])
 
 
+def test_remove_keeps_preexisting_identical_file(tmp_path):
+    """이미 손패치로 놓여 있던 파일(모드 것과 동일)은 제거해도 살아남아야 한다.
+
+    2026-08-04 Nova 실기: 설치가 동일 파일을 '건너뜀'(백업 없음) 하고, 제거가
+    백업 없음을 '내가 놓은 것'으로 오인해 실물 999_Main.rb·폰트를 지웠다.
+    """
+    game, store = put_two_overlapping_asset_mods(tmp_path)
+    target = game / "Graphics" / "look.png"
+    target.write_bytes(b"aaaa")  # Skin A와 동일한 내용이 이미 손으로 들어가 있다
+
+    modstore.apply(store, "Skin A", game)
+    modstore.remove("Skin A", game, store=store)
+    assert target.is_file(), "손패치로 있던 파일이 제거 때 사라졌다"
+    assert target.read_bytes() == b"aaaa"
+
+
 def test_force_overrides_wrong_game(tmp_path):
     """게임 귀속도 강행 가능해야 한다 — 매니저는 제한이 아니라 정보와 가드레일이다."""
     game = make_core_game(tmp_path)
