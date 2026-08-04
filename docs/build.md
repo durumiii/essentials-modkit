@@ -82,6 +82,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 `1f5d16ebacd04676bcbda4ee3d609398a1c1694bc658a961718811b9e19a512b`.
 최근 폴더 5개·기록 지우기판 — sha256
 `d417555d46ea99b5c27ef5e86090b8bbccd75fe886fafa8eb1eb4df900640080`.
+최근 폴더 펼침·현재 폴더 표시판 — sha256
+`4a86bc1992f0a9e5b4002d5416ff912791f2e918a792b7cc73966b1107efe412`.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
