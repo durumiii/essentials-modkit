@@ -41,7 +41,9 @@ SCRIPTS_BACKUP = "Data/Scripts.rxdata.orig"
 MOD_MARK = "MOD:"
 CARD = "mod.json"
 import os
-DEFAULT_STORE = Path(os.environ.get("MODKIT_STORE", "mods"))
+# 실행 위치에 따라 서랍이 떠돌면 안 된다 — exe를 다운로드 폴더에서 더블클릭했더니
+# 보관소가 Downloads/mods(야생 zip 무더기)에 겹쳐 만들어진 실물 사고(2026-08-04).
+DEFAULT_STORE = Path(os.environ.get("MODKIT_STORE") or Path.home() / ".modkit" / "mods")
 _UNSAFE = re.compile(r'[/\\:*?"<>|]')
 
 

@@ -267,8 +267,31 @@ def main(argv=None) -> int:
         "modkit — Essentials 팬게임 모드 관리자", str(index), js_api=api,
         width=780, height=680, min_size=(560, 480))
     api.set_window(window)
-    webview.start()
+    webview.start(_wire_drop, window)
     return 0
+
+
+def _wire_drop(window) -> None:
+    """드롭된 파일의 실경로 배달.
+
+    브라우저 보안상 JS의 File 객체에는 실경로가 없다 — pywebview는 **파이썬 쪽**
+    DOM 이벤트의 직렬화에만 `pywebviewFullPath`를 실어 준다. 그래서 여기서 받아
+    JS(`handleDroppedPaths`)로 넘긴다. 폴더 여부도 파이썬만 알 수 있어 함께 실어 준다.
+    """
+    from webview.dom import DOMEventHandler
+
+    def on_drop(e):
+        files = (e.get("dataTransfer") or {}).get("files") or []
+        dropped = [
+            {"path": p, "isDir": Path(p).is_dir()}
+            for f in files if (p := f.get("pywebviewFullPath"))
+        ]
+        if dropped:
+            window.evaluate_js(f"window.handleDroppedPaths({json.dumps(dropped)})")
+
+    # prevent_default까지 파이썬 쪽에서 걸어야 브라우저가 파일을 열어 버리지 않는다.
+    window.dom.document.events.dragover += DOMEventHandler(lambda e: None, True, True)
+    window.dom.document.events.drop += DOMEventHandler(on_drop, True, True)
 
 
 if __name__ == "__main__":

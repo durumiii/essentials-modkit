@@ -151,9 +151,9 @@ function openFolder(path) {
         return;
       }
       if (status.has_manifest) {
-        runDiagnose();
+        runDiagnose();      // 원본 대조는 정답지(동봉 manifest.json)가 있는 폴더에서만 가능하다
       } else {
-        showModsScreen("매니페스트가 없는 폴더예요 — 진단 없이 모드만 관리해요.");
+        showModsScreen();   // 매니페스트 없는 폴더가 표준이다 — 안내할 것이 없다
       }
     });
   });
@@ -303,24 +303,20 @@ function pickModFolder() {
   });
 }
 
-// pywebview 6은 드롭된 File에 실경로(pywebviewFullPath)를 실어 준다.
-// 없는 환경(옛 판·일부 백엔드)에서는 버튼 폴백을 안내한다.
+// 실경로는 JS File 객체에는 없다 — 파이썬 쪽 DOM 핸들러(app._wire_drop)가 받아서
+// 이 함수로 넘겨 준다. JS의 드롭 리스너는 하이라이트 표시만 맡는다.
+window.handleDroppedPaths = dropped => {
+  if (!currentPath) { toast("게임 폴더를 먼저 열어 주세요 — 입양은 게임 기준이에요."); return; }
+  dropped.forEach(d => {
+    if (d.isDir) importFolder(d.path);
+    else if (d.path.toLowerCase().endsWith(".zip")) importZip(d.path);
+    else toast(`${d.path} — zip이나 폴더만 반입돼요.`);
+  });
+};
+
 const dropzone = document.getElementById("dropzone");
 dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("over"); });
 dropzone.addEventListener("dragleave", () => dropzone.classList.remove("over"));
-dropzone.addEventListener("drop", e => {
-  e.preventDefault();
-  dropzone.classList.remove("over");
-  const dropped = [...(e.dataTransfer.files || [])];
-  const paths = dropped.map(f => f.pywebviewFullPath).filter(Boolean);
-  if (!paths.length) {
-    toast("드롭 경로를 못 읽었어요 — 아래 선택 버튼을 써 주세요.");
-    return;
-  }
-  paths.forEach(p => {
-    if (p.toLowerCase().endsWith(".zip")) importZip(p);
-    else importFolder(p);   // 폴더(또는 확장자 없는 항목)는 폴더 반입으로
-  });
-});
+dropzone.addEventListener("drop", e => { e.preventDefault(); dropzone.classList.remove("over"); });
 </script>
 </body></html>
