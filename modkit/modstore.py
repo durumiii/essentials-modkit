@@ -72,6 +72,7 @@ class Mod:
     updated_at: str = ""  # 스크립트가 마지막으로 바뀐 시각
     baseline_taken: bool = False  # 원본 코드를 저장해 봤는가 (빈 것과 안 해 본 것은 다르다)
     description: str = ""  # 이 모드가 무엇을 하는지 — mod.json에서 사람이 고쳐 쓴다
+    summary: str = ""  # 서랍 목록에 뜨는 한 줄 요약 — 긴 얘기는 description의 몫
     assets: tuple = ()  # 함께 들어가야 하는 그림·소리 (`modassets` 참고)
 
     @property
@@ -449,6 +450,7 @@ def read_mod(store: Path | str, name: str) -> Mod:
         updated_at=told.get("updated_at", ""),
         baseline_taken=bool(told.get("baseline_taken")),
         description=told.get("description", ""),
+        summary=told.get("summary", ""),
         assets=tuple(told.get("assets") or ()),
     )
 

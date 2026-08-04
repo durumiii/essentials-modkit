@@ -154,12 +154,13 @@ class Api:
                     # 에셋 전용 모드는 묶음·주입 섹션에 이름이 안 남는다 — 파일로 답한다.
                     on = modassets.applied(mod, game_dir)
                 available.append(
-                    {"name": mod.name, "description": mod.description, "installed": on})
+                    {"name": mod.name, "description": mod.description,
+                     "summary": mod.summary, "installed": on})
             return {"ok": True, "installed": installed, "available": available}
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
-    def edit_mod(self, name, new_name="", new_game="", game_path="") -> dict:
+    def edit_mod(self, name, new_name="", new_game="", game_path="", new_summary=None) -> dict:
         """모드의 이름표와 게임 소속을 사람이 다듬는다 — 입양 기본값은 추정일 뿐이다."""
         try:
             final = name
@@ -169,6 +170,12 @@ class Api:
                 final = new_name
             mod = modstore.read_mod(self.store_dir, final)
             game = mod.game
+            if new_summary is not None:
+                card_path = Path(mod.folder) / "mod.json"
+                told = json.loads(card_path.read_text(encoding="utf-8"))
+                told["summary"] = new_summary
+                card_path.write_text(json.dumps(told, ensure_ascii=False, indent=2) + "\n",
+                                     encoding="utf-8")
             if new_game and new_game != mod.game:
                 modstore.reassign(self.store_dir, final, new_game)
                 game = new_game

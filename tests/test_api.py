@@ -110,7 +110,7 @@ def test_apply_and_remove_mod_round_trip(tmp_path):
     got = api.mods(game)
     assert got["ok"] is True
     assert got["installed"] == []
-    assert got["available"] == [{"name": "My Mod", "description": "", "installed": False}]
+    assert got["available"] == [{"name": "My Mod", "description": "", "summary": "", "installed": False}]
 
     applied = api.apply_mod(game, "My Mod")
     assert applied == {"ok": True, "did": "설치됨", "warnings": []}
@@ -325,3 +325,17 @@ def test_delete_mod_moves_to_trash_and_uninstalls(tmp_path):
     with pytest.raises(modstore.ModMissing):
         modstore.read_mod(store, "Doomed")                     # 서랍에서 사라짐
     assert list((store / "_trash").rglob("mod.json"))          # 실물은 _trash에 남는다
+
+
+def test_summary_flows_to_shelf_list(tmp_path):
+    """긴 설명이 목록을 난잡하게 만든다(실기) — 한 줄 요약 자리가 따로 있다."""
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    put_mod(store, "Wordy", extra={"summary": "한 줄 요약이에요",
+                                   "description": "아주 " * 100 + "긴 설명"})
+    r = api.mods(str(game))
+    assert r["available"][0]["summary"] == "한 줄 요약이에요"
+
+    r = api.edit_mod("Wordy", new_summary="더 짧게")
+    assert r["ok"]
+    assert api.mods(str(game))["available"][0]["summary"] == "더 짧게"

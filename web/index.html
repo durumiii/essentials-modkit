@@ -48,7 +48,7 @@
    border-radius:50%;display:inline-block;animation:spin .8s linear infinite;vertical-align:-2px}
  @keyframes spin{to{transform:rotate(360deg)}}
  .name{font-weight:600}
- .desc{color:var(--sub);font-size:12.5px}
+ .desc{color:var(--sub);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
 </style></head>
 <body>
 <header><b>modkit</b> — Essentials 팬게임 모드 관리자</header>
@@ -109,6 +109,9 @@
     <p class=sub>이름표와 게임 소속이에요. 자동으로 채워진 값이라 다듬어도 돼요.</p>
     <p class=sub style="margin-bottom:4px">모드 이름</p>
     <input id=edit-name style="width:100%;margin-bottom:12px;padding:10px;border-radius:8px;
+      border:1px solid var(--line);background:var(--card);color:var(--tx);font-family:inherit">
+    <p class=sub style="margin-bottom:4px">한 줄 요약 (서랍 목록에 떠요 — 긴 설명은 mod.json의 description에)</p>
+    <input id=edit-summary style="width:100%;margin-bottom:12px;padding:10px;border-radius:8px;
       border:1px solid var(--line);background:var(--card);color:var(--tx);font-family:inherit">
     <p class=sub style="margin-bottom:4px">게임 (Game.ini의 Title과 같아야 그 게임 서랍에 보여요)</p>
     <input id=edit-game style="width:100%;margin-bottom:16px;padding:10px;border-radius:8px;
@@ -282,7 +285,10 @@ function loadMods() {
       const card = document.createElement("div");
       card.className = "card";
       const info = document.createElement("div");
-      info.innerHTML = `<div class=name>${mod.name}</div><div class=desc>${mod.description || ""}</div>`;
+      const oneLiner = mod.summary || (mod.description || "").split("\n")[0];
+      info.innerHTML = `<div class=name>${mod.name}</div><div class=desc></div>`;
+      info.querySelector(".desc").textContent = oneLiner;
+      info.querySelector(".desc").title = mod.description || "";  // 긴 설명은 툴팁으로
       const btn = document.createElement("button");
       if (mod.installed) {
         btn.textContent = "제거";
@@ -296,7 +302,7 @@ function loadMods() {
       const editBtn = document.createElement("button");
       editBtn.textContent = "수정";
       editBtn.title = "이름·게임 소속 수정";
-      editBtn.onclick = () => editMod(mod.name);
+      editBtn.onclick = () => editMod(mod.name, mod.summary);
       card.appendChild(info);
       card.appendChild(editBtn);
       card.appendChild(btn);
@@ -331,9 +337,10 @@ function openGameFolder() {
   api().open_path(currentPath).then(r => { if (!r.ok) toast("열기 실패 — " + r.error); });
 }
 
-function editMod(name) {
+function editMod(name, summary) {
   const box = document.getElementById("edit");
   document.getElementById("edit-name").value = name;
+  document.getElementById("edit-summary").value = summary || "";
   document.getElementById("edit-game").value = (currentGame && currentGame.title) || "";
   box.style.display = "block";
   document.getElementById("edit-cancel").onclick = () => { box.style.display = "none"; };
@@ -356,7 +363,8 @@ function editMod(name) {
   document.getElementById("edit-save").onclick = () => {
     const newName = document.getElementById("edit-name").value.trim();
     const newGame = document.getElementById("edit-game").value.trim();
-    api().edit_mod(name, newName, newGame, currentPath || "").then(r => {
+    const newSummary = document.getElementById("edit-summary").value.trim();
+    api().edit_mod(name, newName, newGame, currentPath || "", newSummary).then(r => {
       box.style.display = "none";
       if (!r.ok) { toast("수정 실패 — " + r.error); return; }
       toast(`"${r.name}" (${r.game}) — 저장했어요.`);
