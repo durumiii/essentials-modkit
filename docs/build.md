@@ -92,6 +92,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 `adf08a54045527dd96404a76b8c165934cac43b8f08781ab70a386715c2f8331`.
 순서 선언 겹침 층 안내판 — sha256
 `f3ad8259406e17ccfe00ed4b1410aa195bedb2f1ba563bcb14158d1bc5d668bf`.
+에셋 층 보관·게이트 증거판 — sha256
+`b182170a272f07e7bd9ffbd5891410c0eac5806993eb8c2e6d385be88853321d`.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
