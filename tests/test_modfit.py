@@ -82,6 +82,26 @@ def test_baseline_roundtrip_keeps_singleton_place(tmp_path):
     assert set(modfit.read_baseline(_Mod(tmp_path))) == {"Input.update", "Scene_Map#main"}
 
 
+def test_baseline_filename_has_no_colon(tmp_path):
+    """`::`는 NTFS 파일명에 못 들어간다 — 이름은 안전한 치환으로 눕히고 왕복은 유지.
+
+    2026-08-04 실기: WSL이 쓴 `Battle::Scene__x.rb`가 NTFS에 사설 영역 문자
+    (U+F03A)로 저장돼, Windows exe의 검사가 그 자리를 영영 못 찾았다(전부 '없어요').
+    """
+    modfit.write_baseline(tmp_path, {"Battle::Scene#pbShow": "def pbShow\nend\n"})
+    names = [p.name for p in (tmp_path / "baseline").glob("*.rb")]
+    assert names and all(":" not in n for n in names)
+    assert set(modfit.read_baseline(_Mod(tmp_path))) == {"Battle::Scene#pbShow"}
+
+
+def test_read_baseline_heals_ntfs_mangled_colons(tmp_path):
+    """WSL이 이미 눕혀 둔 `::` 파일명(NTFS에선 U+F03A로 치환)도 읽을 때 복원한다."""
+    room = tmp_path / "baseline"
+    room.mkdir()
+    (room / "BattleScene__pbShow.rb").write_text("def pbShow\nend\n")
+    assert set(modfit.read_baseline(_Mod(tmp_path))) == {"Battle::Scene#pbShow"}
+
+
 class _Mod:
     def __init__(self, folder):
         self.folder = folder

@@ -116,18 +116,29 @@ def read_baseline(mod) -> dict:
         return {}
     found = {}
     for path in sorted(room.glob("*.rb")):
-        found[path.stem.replace("__", "#")] = path.read_text(encoding="utf-8")
+        found[_place_of(path.stem)] = path.read_text(encoding="utf-8")
     return found
 
 
+def _place_of(stem: str) -> str:
+    """파일 이름을 자리 표기로 되돌린다.
+
+    `%3A`는 우리가 쓰는 `:`의 치환이고, U+F03A는 WSL이 NTFS 금지 문자 `:`를
+    몰래 바꿔 저장하는 사설 영역 문자다 — Windows 네이티브 파이썬은 그 글자를
+    그대로 읽어, 자리를 소스에서 영영 못 찾았다(2026-08-04 실기, 전부 '없어요').
+    """
+    return stem.replace("__", "#").replace("%3A", ":").replace("", ":")
+
+
 def write_baseline(folder: Path | str, baseline: dict) -> Path:
-    """기준선을 모드 옆에 눕힌다."""
+    """기준선을 모드 옆에 눕힌다. `:`는 NTFS 파일명에 못 들어가 `%3A`로 치환한다."""
     room = Path(folder) / BASELINE
     room.mkdir(parents=True, exist_ok=True)
     for stale in room.glob("*.rb"):
         stale.unlink()
     for place, source in baseline.items():
-        (room / f"{place.replace('#', '__')}.rb").write_text(source, encoding="utf-8")
+        name = place.replace("#", "__").replace(":", "%3A")
+        (room / f"{name}.rb").write_text(source, encoding="utf-8")
     return room
 
 

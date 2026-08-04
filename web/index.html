@@ -5,6 +5,10 @@
  :root{--bg:#16171b;--panel:#1e2026;--card:#23252c;--line:#32343d;--tx:#e6e7ea;--sub:#9a9ca6;
    --acc:#5b8def;--acc2:#3d68c4;--ok:#4cc38a;--warn:#e5a54b;--err:#e5644b}
  *{box-sizing:border-box}
+ ::-webkit-scrollbar{width:10px;height:10px}
+ ::-webkit-scrollbar-track{background:transparent}
+ ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;border:2px solid var(--bg)}
+ ::-webkit-scrollbar-thumb:hover{background:var(--sub)}
  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);
    color:var(--tx);min-height:100vh}
  header{background:var(--panel);border-bottom:1px solid var(--line);padding:16px 28px;
@@ -136,7 +140,7 @@
   <div style="max-width:520px;margin:18vh auto 0;background:var(--panel);border:1px solid var(--line);
     border-radius:14px;padding:22px">
     <h2 id=ask-title>설치 전에 알려 드려요</h2>
-    <div id=ask-body class=foreign-list style="max-height:220px;white-space:pre-line"></div>
+    <div id=ask-body class=foreign-list style="max-height:220px;white-space:pre-line;user-select:text;cursor:text"></div>
     <div class=row>
       <button id=ask-go class=primary>계속 설치</button>
       <button id=ask-no>취소</button>

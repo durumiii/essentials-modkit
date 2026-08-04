@@ -414,7 +414,7 @@ def main(argv=None) -> int:
     api = Api(store_dir, state_path)
     window = webview.create_window(
         "modkit — Essentials 팬게임 모드 관리자", str(index), js_api=api,
-        width=780, height=680, min_size=(560, 480))
+        width=780, height=680, min_size=(560, 480), text_select=True)
     api.set_window(window)
     webview.start(_wire_drop, window)
     return 0
