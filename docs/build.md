@@ -42,6 +42,10 @@ UTF-8로 바꿔 한글 CLI 출력이 그대로 보인다. 이 경로는 exe로 �
 `2544c2287b3a2c1bee9c6d69d7b9ed28b8b595c38e7be7b54badd1cfcb198eb8`로 바뀌었다.
 CLI 스모크(`shelf --store <빈 폴더>`)는 재빌드본에서도 `보관소가 비어 있어요.` ·
 종료 코드 0이었다.
+adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 구웠다(26초) —
+14409136바이트, sha256
+`e2eb29ee67ad7187538b0c9ca687ee96954abf2c3d6e61e0eb41eeadafcab957`.
+스모크는 shelf(위와 동일)와 `adopt`(usage 출력으로 서브커맨드 탑재 확인) 둘 다 통과.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
