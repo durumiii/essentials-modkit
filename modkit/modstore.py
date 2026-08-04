@@ -156,22 +156,25 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     game_dir = Path(game_dir)
 
     here = gameinfo.read_title(game_dir)
+    warnings = []
     if mod.game and gameinfo.canon(mod.game) != gameinfo.canon(here):
-        raise WrongGame(
-            f"`{mod.name}`은(는) `{mod.game}` 전용 모드예요. 이 게임은 `{here}`입니다.\n"
-            "클래스 이름이 같아도 다른 게임에서는 다른 것을 가리킬 수 있어요."
-        )
+        # 귀속 불일치도 강행 가능하다 — 매니저의 일은 제한이 아니라 정보와
+        # 가드레일이고, 백업(.orig)이 되돌릴 길을 지킨다.
+        why = (f"`{mod.name}`은(는) `{mod.game}` 전용 모드예요. 이 게임은 `{here}`예요 — "
+               "클래스 이름이 같아도 다른 게임에서는 다른 것을 가리킬 수 있어요.")
+        if not force:
+            raise WrongGame(why)
+        warnings.append(f"강행: {why}")
 
     card = json.loads((mod.folder / CARD).read_text(encoding="utf-8"))
     already = present(store, game_dir, game=mod.game or here)
     others = [one for one in already if one != mod.name]
-    warnings = []
     try:
-        warnings = declare.gate(card, others, store)
+        warnings += declare.gate(card, others, store)
     except declare.Blocked as no:
         if not force:
             raise
-        warnings = [f"강행: {why}" for why in no.reasons]
+        warnings += [f"강행: {why}" for why in no.reasons]
 
     # 얹기 전 호환 판정 — 게임이 판 올림으로 원본을 고쳤는데 모드가 낡은 것을
     # 되살리는 사고를 여기서 막는다. fits·unknown은 조용히 지나간다(unknown은

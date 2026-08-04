@@ -339,3 +339,20 @@ def test_summary_flows_to_shelf_list(tmp_path):
     r = api.edit_mod("Wordy", new_summary="더 짧게")
     assert r["ok"]
     assert api.mods(str(game))["available"][0]["summary"] == "더 짧게"
+
+
+def test_apply_mod_reports_mismatch_for_force_choice(tmp_path):
+    """판 불일치·귀속 불일치는 죽은 끝이 아니라 강행 선택지로 돌아온다."""
+    import zlib
+    from tests.test_apply_check import put_asset_mod
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"v2-look")
+    put_asset_mod(store, "Old Game", crc=zlib.crc32(b"v1-look"))
+
+    r = api.apply_mod(str(game), "Skin")
+    assert r["ok"] is False and r.get("mismatch")
+
+    r = api.apply_mod(str(game), "Skin", force=True)
+    assert r["ok"] is True

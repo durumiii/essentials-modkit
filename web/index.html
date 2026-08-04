@@ -319,10 +319,11 @@ function bullets(lines) {
   }).join("\n");
 }
 
-function ask(lines) {
+function ask(lines, goLabel) {
   // WebView가 confirm()을 그리는지에 기대지 않는다 — 자체 모달로 Promise<bool>.
   return new Promise(resolve => {
     const box = document.getElementById("ask");
+    document.getElementById("ask-go").textContent = goLabel || "계속 설치";
     const tail = lines[lines.length - 1];
     document.getElementById("ask-body").textContent =
       bullets(lines.slice(0, -2)) + "\n\n" + tail;
@@ -377,7 +378,9 @@ function applyMod(name) {
   api().preview_apply(currentPath, name).then(p => {
     if (!p.ok) { toast("확인 실패 — " + p.error); return; }
     if (p.blocked && p.blocked.length) {
-      toast("설치할 수 없어요 — " + p.blocked.join(", "));
+      ask([...p.blocked, "", "제작자 선언이 말리는 설치예요. 그래도 진행할까요? (백업으로 되돌릴 수 있어요)"],
+          "알고도 설치")
+        .then(go => { if (go) doApply(name, true); });
       return;
     }
     if (p.warnings && p.warnings.length) {
@@ -389,11 +392,20 @@ function applyMod(name) {
   });
 }
 
-function doApply(name) {
-  api().apply_mod(currentPath, name).then(r => {
+function doApply(name, force) {
+  api().apply_mod(currentPath, name, !!force).then(r => {
     if (!r.ok) {
-      if (r.blocked) toast("설치할 수 없어요 — " + r.blocked.join(", "));
-      else toast("설치 실패 — " + r.error);
+      if (r.mismatch) {
+        ask([...r.mismatch, "", "설치하면 낡은 코드가 되살아날 수 있어요. 그래도 진행할까요? (백업으로 되돌릴 수 있어요)"],
+            "알고도 설치")
+          .then(go => { if (go) doApply(name, true); });
+      } else if (r.blocked) {
+        ask([...r.blocked, "", "제작자 선언이 말리는 설치예요. 그래도 진행할까요? (백업으로 되돌릴 수 있어요)"],
+            "알고도 설치")
+          .then(go => { if (go) doApply(name, true); });
+      } else {
+        toast("설치 실패 — " + r.error);
+      }
       return;
     }
     toast(r.warnings && r.warnings.length

@@ -92,3 +92,16 @@ def test_apply_warns_on_asset_overlap(tmp_path):
     modstore.apply(store, "Skin A", game)
     done = modstore.apply(store, "Skin B", game)
     assert any("Graphics/look.png" in w and "Skin A" in w for w in done["warnings"])
+
+
+def test_force_overrides_wrong_game(tmp_path):
+    """게임 귀속도 강행 가능해야 한다 — 매니저는 제한이 아니라 정보와 가드레일이다."""
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    from tests.test_inject import put_mod
+    put_mod(store, "Foreign", game="Another Game")
+
+    with pytest.raises(modstore.WrongGame):
+        modstore.apply(store, "Foreign", game)
+    done = modstore.apply(store, "Foreign", game, force=True)
+    assert any("강행" in w for w in done["warnings"])

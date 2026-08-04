@@ -239,6 +239,9 @@ class Api:
             done = modstore.apply(self.store_dir, name, game_dir, force=force)
         except declare.Blocked as no:
             return {"ok": False, "blocked": no.reasons}
+        except (modstore.BaseChanged, modstore.WrongGame) as warn:
+            # 죽은 끝이 아니다 — 화면이 사유를 보여 주고 강행 여부를 유저에게 묻는다.
+            return {"ok": False, "mismatch": str(warn).split("\n")}
         except Exception as err:
             return {"ok": False, "error": str(err)}
         self._log(game_dir, "apply_mod", name)
