@@ -80,6 +80,7 @@
 <section id=s-mods class="screen">
   <div class=panel>
     <h2>모드 서랍</h2>
+    <p class=sub id=mods-game></p>
     <div id=mods-banner></div>
     <div class=drop id=dropzone>
       zip이나 모드 폴더를 여기로 끌어다 놓거나
@@ -141,6 +142,8 @@ function pickFolder() {
   });
 }
 
+let currentGame = null;   // game_status 결과 — 서랍 머리글에 게임 이름을 띄운다
+
 function openFolder(path) {
   currentPath = path;
   api().remember(path).then(() => {
@@ -150,6 +153,7 @@ function openFolder(path) {
         toast("여기는 게임 폴더가 아닌 것 같아요 — Data 폴더나 Game.ini가 안 보여요.");
         return;
       }
+      currentGame = status;
       if (status.has_manifest) {
         runDiagnose();      // 원본 대조는 정답지(동봉 manifest.json)가 있는 폴더에서만 가능하다
       } else {
@@ -179,7 +183,7 @@ function runDiagnose() {
     if (!d.ok) { showModsScreen("진단 실패 — " + d.error); return; }
     document.getElementById("btn-quarantine").disabled = !d.foreign.length;
     if (d.foreign.length) {
-      light.innerHTML = `<div class="light warn"><span class=dot></span>외래 파일 ${d.foreign.length}개가 있어요</div>`;
+      light.innerHTML = `<div class="light warn"><span class=dot></span>원본에 없는 파일 ${d.foreign.length}개가 있어요</div>`;
       foreignBox.style.display = "block";
       foreignBox.textContent = d.foreign.join(", ");
     } else if (d.missing.length) {
@@ -205,7 +209,7 @@ function quarantineAndContinue() {
     `<div class="light"><span class=spin></span>격리 중이에요… (다시 확인하고 옮겨요)</div>`;
   api().quarantine_foreign(currentPath).then(r => {
     if (!r.ok) { toast("격리 실패 — " + r.error); runDiagnose(); return; }
-    if (r.moved) toast(`외래 파일 ${r.moved}개를 _quarantine 폴더로 옮겼어요.`);
+    if (r.moved) toast(`원본에 없는 파일 ${r.moved}개를 _quarantine 폴더에 옮겨 뒀어요.`);
     showModsScreen();
   });
 }
@@ -214,6 +218,14 @@ function skipDiagnose() { showModsScreen(); }
 
 function showModsScreen(banner) {
   showScreen("s-mods");
+  const who = document.getElementById("mods-game");
+  if (currentGame && currentGame.known) {
+    who.textContent = `${currentGame.label} (${currentGame.title})`;
+  } else if (currentGame) {
+    who.textContent = currentGame.title;   // 모르는 게임이라도 이름은 보여 준다
+  } else {
+    who.textContent = "";
+  }
   document.getElementById("mods-banner").innerHTML = banner
     ? `<div class=banner>${banner}</div>` : "";
   loadMods();
@@ -231,11 +243,11 @@ function loadMods() {
       info.innerHTML = `<div class=name>${mod.name}</div><div class=desc>${mod.description || ""}</div>`;
       const btn = document.createElement("button");
       if (mod.installed) {
-        btn.textContent = "빼기";
+        btn.textContent = "제거";
         btn.className = "danger";
         btn.onclick = () => removeMod(mod.name);
       } else {
-        btn.textContent = "얹기";
+        btn.textContent = "설치";
         btn.className = "primary";
         btn.onclick = () => applyMod(mod.name);
       }
@@ -249,8 +261,8 @@ function loadMods() {
 function applyMod(name) {
   api().apply_mod(currentPath, name).then(r => {
     if (!r.ok) {
-      if (r.blocked) toast("얹을 수 없어요 — " + r.blocked.join(", "));
-      else toast("얹기 실패 — " + r.error);
+      if (r.blocked) toast("설치할 수 없어요 — " + r.blocked.join(", "));
+      else toast("설치 실패 — " + r.error);
       return;
     }
     if (r.warnings && r.warnings.length) toast(r.warnings.join(" / "));
@@ -260,7 +272,7 @@ function applyMod(name) {
 
 function removeMod(name) {
   api().remove_mod(currentPath, name).then(r => {
-    if (!r.ok) { toast("빼기 실패 — " + r.error); return; }
+    if (!r.ok) { toast("제거 실패 — " + r.error); return; }
     loadMods();
   });
 }
@@ -269,7 +281,7 @@ function importZip(path) {
   api().import_zip(path, currentPath || "").then(r => {
     if (!r.ok) { toast("zip 반입 실패 — " + r.error); return; }
     if (r.adopted) {
-      toast(`"${r.name}" 모드로 입양했어요. 이름과 설명은 나중에 다듬어 주세요.`);
+      toast(`"${r.name}" 모드로 만들어 서랍에 넣었어요. 이름과 설명은 나중에 다듬으면 돼요.`);
       (r.notes || []).forEach(n => toast(n));
     } else {
       toast(`"${r.name}" 모드를 서랍에 넣었어요.`);
@@ -282,7 +294,7 @@ function importFolder(path) {
   api().import_folder(path, currentPath || "").then(r => {
     if (!r.ok) { toast("폴더 반입 실패 — " + r.error); return; }
     if (r.adopted) {
-      toast(`"${r.name}" 모드로 입양했어요. 이름과 설명은 나중에 다듬어 주세요.`);
+      toast(`"${r.name}" 모드로 만들어 서랍에 넣었어요. 이름과 설명은 나중에 다듬으면 돼요.`);
       (r.notes || []).forEach(n => toast(n));
     } else {
       toast(`"${r.name}" 모드를 서랍에 넣었어요.`);
@@ -306,7 +318,7 @@ function pickModFolder() {
 // 실경로는 JS File 객체에는 없다 — 파이썬 쪽 DOM 핸들러(app._wire_drop)가 받아서
 // 이 함수로 넘겨 준다. JS의 드롭 리스너는 하이라이트 표시만 맡는다.
 window.handleDroppedPaths = dropped => {
-  if (!currentPath) { toast("게임 폴더를 먼저 열어 주세요 — 입양은 게임 기준이에요."); return; }
+  if (!currentPath) { toast("게임 폴더를 먼저 열어 주세요 — 어느 게임의 모드인지 알아야 해요."); return; }
   dropped.forEach(d => {
     if (d.isDir) importFolder(d.path);
     else if (d.path.toLowerCase().endsWith(".zip")) importZip(d.path);

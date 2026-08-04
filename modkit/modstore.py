@@ -166,7 +166,7 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     if fit.verdict == modfit.CHANGED:
         if not force:
             raise BaseChanged(
-                "이 게임 판과 안 맞아요 — 얹으면 낡은 코드가 되살아나요:\n"
+                "이 게임 판과 안 맞아요 — 설치하면 낡은 코드가 되살아나요:\n"
                 + "\n".join(fit.findings))
         warnings += [f"강행: {why}" for why in fit.findings]
 
@@ -193,7 +193,7 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
             if need not in others:
                 warnings.append(
                     f"`{need}`가 아직 없어서 `{mod.name}`이 앞에 놓여요 — "
-                    f"`{need}`를 얹은 뒤 `{mod.name}`을 다시 얹으면 순서가 잡혀요")
+                    f"`{need}`를 설치한 뒤 `{mod.name}`을 다시 설치하면 순서가 잡혀요")
         done = _inject(mod, game_dir)
         done["warnings"] = warnings
         return done

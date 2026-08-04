@@ -103,7 +103,7 @@ def check(game_dir: Path | str, mod, skip_self: bool = True, sources=None) -> Fi
         if now is None:
             findings.append(f"{place}가 이 버전에는 없어요 — 모드가 수정할 대상이 사라졌어요")
         elif _tidy(now) != _tidy(was):
-            findings.append(f"{place}가 이 버전에서 바뀌었어요 — 모드가 예전 코드로 되돌립니다")
+            findings.append(f"{place}가 이 버전에서 바뀌었어요 — 모드가 예전 코드로 되돌려요")
 
     verdict = CHANGED if findings else FITS
     return Fit(verdict=verdict, findings=tuple(findings), checked=len(baseline))

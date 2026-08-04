@@ -246,3 +246,10 @@ def test_import_folder_without_card_adopts(tmp_path):
 
     r = api.import_folder(str(src), str(game))
     assert r["ok"] and r["adopted"] and r["name"] == "wildfolder"
+
+
+def test_game_status_carries_identity(tmp_path):
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)      # 제목 "Old Game" — 아는 게임이 아니다
+    r = api.game_status(str(game))
+    assert r["ok"] and r["label"] == "Old Game" and r["known"] is False

@@ -48,3 +48,12 @@ def test_roundtrip_harvest_apply_remove(tmp_path):
 def test_gameinfo_title_fallback(tmp_path):
     from modkit import gameinfo
     assert gameinfo.read_title(tmp_path) == tmp_path.name  # Game.ini 없으면 폴더 이름
+
+
+def test_identify_known_game(tmp_path):
+    from modkit import gameinfo
+    game = tmp_path / "z"
+    game.mkdir()
+    (game / "Game.ini").write_text("[Game]\nTitle=Pokemon Z Fangame\n", encoding="utf-8")
+    who = gameinfo.identify(game)
+    assert who == {"title": "Pokemon Z Fangame", "known": True, "label": "포켓몬 Z 팬게임"}

@@ -2,7 +2,7 @@
 
 RPG Maker 기반 Essentials 팬게임(포켓몬 Z, Wishing Star 등)의 모드·패치
 관리자예요. 모드를 **mod.json 카드가 붙은 폴더** 하나로 정의하고, 그 단위로
-얹고 빼고 진단해요.
+설치하고 제거하고 진단해요.
 
 ## 유저용 — 패치·모드 설치와 진단
 
@@ -10,7 +10,7 @@ RPG Maker 기반 Essentials 팬게임(포켓몬 Z, Wishing Star 등)의 모드·
    `modkit.exe` 받기
 2. 실행해서 게임 폴더 고르기
 3. 진단 결과에서 옛 패치 흔적이 나오면 격리
-4. 모드 서랍에서 모드 얹고 빼기
+4. 모드 서랍에서 모드 설치와 제거
 
 알아 둘 것:
 
@@ -37,7 +37,7 @@ mod.json 필드:
 | 필드 | 뜻 |
 |---|---|
 | `name`, `scripts` | 필수. 에셋만 있는 모드는 scripts를 빈 배열로 |
-| `game` | 강력 권장. 다른 게임에 잘못 얹히는 사고를 막아요 |
+| `game` | 강력 권장. 다른 게임에 잘못 설치되는 사고를 막아요 |
 | `description` | 유저의 모드 서랍에 그대로 뜨는 설명 |
 | `touches` `order` `requires` `conflicts` | 여러 모드가 공존할 때의 선언. [SPEC.md](SPEC.md) 2절 |
 

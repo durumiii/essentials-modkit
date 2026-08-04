@@ -72,9 +72,12 @@ class Api:
                 installed = modstore.installed(game_dir)
             except modstore.NoBundle:
                 installed = []
+            who = gameinfo.identify(game_dir)
             return {
                 "ok": True,
-                "title": gameinfo.read_title(game_dir),
+                "title": who["title"],
+                "label": who["label"],
+                "known": who["known"],
                 "installed": installed,
                 "has_manifest": (game_dir / MANIFEST_NAME).is_file(),
                 # 게임 폴더인지 어림 판정 — 엉뚱한 폴더를 골랐을 때 화면이 알려 준다
@@ -182,7 +185,7 @@ class Api:
         if not game_path:
             return {"ok": False,
                     "error": "mod.json이 없는 zip이에요 — 게임 폴더를 먼저 연 뒤 반입하면 "
-                             "모드로 입양할 수 있어요."}
+                             "모드로 만들 수 있어요."}
         try:
             got = adopt.adopt(zip_path, game_path, self.store_dir)
         except adopt.NotAMod as no:
