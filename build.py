@@ -72,7 +72,8 @@ def sandbox(exe: Path) -> None:
         return
     # 통째 rmtree 대신 우리가 만든 것만 갈아 끼운다 — 유저가 둔 파일을 지우지 않는다.
     SANDBOX.mkdir(parents=True, exist_ok=True)
-    for ours in ("Pokemon Z V2.18", "mods", "modkit.exe", "modkit-test.bat"):
+    # mods/는 안 비운다 — 실환경 테스트용으로 미리 심어 둔 모드들이 산다.
+    for ours in ("Pokemon Z V2.18", "modkit.exe", "modkit-test.bat"):
         target = SANDBOX / ours
         try:
             shutil.rmtree(target) if target.is_dir() else target.unlink(missing_ok=True)
@@ -86,7 +87,7 @@ def sandbox(exe: Path) -> None:
         # 실행 중인 exe는 못 덮는다 — 옆 이름으로 두고 알린다.
         shutil.copy2(exe, SANDBOX / "modkit-new.exe")
         print("modkit.exe가 실행 중이라 modkit-new.exe로 뒀어요 — 창을 닫고 갈아 끼워 주세요.")
-    (SANDBOX / "mods").mkdir()
+    (SANDBOX / "mods").mkdir(exist_ok=True)
     (SANDBOX / "modkit-test.bat").write_text(
         '@echo off\r\nset "MODKIT_STORE=%~dp0mods"\r\n'
         'start "" "%~dp0modkit.exe"\r\n', encoding="ascii")
