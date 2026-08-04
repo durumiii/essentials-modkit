@@ -59,18 +59,23 @@ def main() -> int:
 # 준비해 둔다(2026-08-04 사용자 요청). 실행은 동봉 bat — MODKIT_STORE를 샌드박스 안
 # `mods/`로 돌려 실보관소(~/.modkit/mods)를 더럽히지 않는다.
 SANDBOX = Path("/mnt/c/Users/durumii/Downloads/Modkit-Test")
-GAME_ZIP = Path("/mnt/c/Users/durumii/Downloads/POKEMON Z V2.18.zip")
+GAME_ZIPS = (Path("/mnt/c/Users/durumii/Downloads/POKEMON Z V2.18.zip"),
+             Path("/mnt/c/Users/durumii/Downloads/mods/POKEMON Z V2.18.zip"))
 
 
 def sandbox(exe: Path) -> None:
     import zipfile
 
-    if not GAME_ZIP.is_file():
-        print(f"샌드박스 건너뜀 — 순정 게임 zip이 없어요: {GAME_ZIP}")
+    game_zip = next((p for p in GAME_ZIPS if p.is_file()), None)
+    if game_zip is None:
+        print(f"샌드박스 건너뜀 — 순정 게임 zip이 없어요: {GAME_ZIPS[0]}")
         return
-    shutil.rmtree(SANDBOX, ignore_errors=True)
-    SANDBOX.mkdir(parents=True)
-    with zipfile.ZipFile(GAME_ZIP) as zf:
+    # 통째 rmtree 대신 우리가 만든 것만 갈아 끼운다 — 유저가 둔 파일을 지우지 않는다.
+    SANDBOX.mkdir(parents=True, exist_ok=True)
+    for ours in ("Pokemon Z V2.18", "mods", "modkit.exe", "modkit-test.bat"):
+        target = SANDBOX / ours
+        shutil.rmtree(target, ignore_errors=True) if target.is_dir() else target.unlink(missing_ok=True)
+    with zipfile.ZipFile(game_zip) as zf:
         zf.extractall(SANDBOX)  # zip 루트가 "Pokemon Z V2.18" 폴더 하나다
     shutil.copy2(exe, SANDBOX / "modkit.exe")
     (SANDBOX / "mods").mkdir()
