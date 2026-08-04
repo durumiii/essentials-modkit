@@ -74,10 +74,18 @@ def sandbox(exe: Path) -> None:
     SANDBOX.mkdir(parents=True, exist_ok=True)
     for ours in ("Pokemon Z V2.18", "mods", "modkit.exe", "modkit-test.bat"):
         target = SANDBOX / ours
-        shutil.rmtree(target, ignore_errors=True) if target.is_dir() else target.unlink(missing_ok=True)
+        try:
+            shutil.rmtree(target) if target.is_dir() else target.unlink(missing_ok=True)
+        except OSError:
+            print(f"샌드박스 정리 실패(사용 중?): {target} — 계속 진행")
     with zipfile.ZipFile(game_zip) as zf:
         zf.extractall(SANDBOX)  # zip 루트가 "Pokemon Z V2.18" 폴더 하나다
-    shutil.copy2(exe, SANDBOX / "modkit.exe")
+    try:
+        shutil.copy2(exe, SANDBOX / "modkit.exe")
+    except OSError:
+        # 실행 중인 exe는 못 덮는다 — 옆 이름으로 두고 알린다.
+        shutil.copy2(exe, SANDBOX / "modkit-new.exe")
+        print("modkit.exe가 실행 중이라 modkit-new.exe로 뒀어요 — 창을 닫고 갈아 끼워 주세요.")
     (SANDBOX / "mods").mkdir()
     (SANDBOX / "modkit-test.bat").write_text(
         '@echo off\r\nset "MODKIT_STORE=%~dp0mods"\r\n'
