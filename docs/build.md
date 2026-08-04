@@ -48,6 +48,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 스모크는 shelf(위와 동일)와 `adopt`(usage 출력으로 서브커맨드 탑재 확인) 둘 다 통과.
 진단 중 버튼 잠금(web/index.html만 변경)으로 같은 날 한 번 더 — sha256
 `47717116a58174c6c0969dfb22fea3ad44c7d94b8632a092e9db55d1bd411543`.
+폴더 반입·드래그앤드롭판으로 또 한 번 — sha256
+`755a1ed03eb00a3f7a44f3edadb3227f01042393429a048d00e32cf18b86070c`.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
 생성하는 캐시 모듈이라 실행에 지장이 없다.
 
