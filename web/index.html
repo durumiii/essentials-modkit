@@ -330,7 +330,13 @@ function loadMods() {
       info.querySelector(".desc").textContent = oneLiner;
       info.querySelector(".desc").title = mod.description || "";  // 긴 설명은 툴팁으로
       const btn = document.createElement("button");
-      if (mod.installed) {
+      if (mod.partial) {
+        // 반쪽 상태 — 제거는 백업이 없어 막히는 길이니, 출구(마저 설치)를 버튼으로 연다.
+        btn.textContent = "마저 설치";
+        btn.className = "primary";
+        btn.title = "나머지 파일을 채우고 백업을 잡아 정식 상태로 만들어요 — 그 뒤엔 제거도 돼요";
+        btn.onclick = () => applyMod(mod.name);
+      } else if (mod.installed) {
         btn.textContent = "제거";
         btn.className = "danger";
         btn.onclick = () => removeMod(mod.name);
