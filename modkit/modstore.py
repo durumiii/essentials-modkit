@@ -506,11 +506,11 @@ def _draft_touches(scripts, assets) -> dict:
     """제작자 선언의 초안 — 모드 소스에서 재정의 메서드를, 에셋에서 파일을 뽑는다.
 
     `modfit.overrides`를 그대로 쓴다(계산 규칙이 두 벌이 되면 어긋난다) — 그게 이미
-    모드 스크립트에서 재정의된 (클래스, 메서드) 쌍을 뽑는 유일한 곳이다.
+    모드 스크립트에서 재정의된 자리를 뽑는 유일한 곳이다.
     """
     from . import modfit
 
-    methods = sorted(f"{cls}#{method}" for cls, method in modfit.overrides(scripts))
+    methods = sorted(modfit.overrides(scripts))
     files = sorted(a.get("install_to", "") for a in assets if a.get("install_to"))
     return {"methods": methods, "files": files}
 

@@ -55,12 +55,20 @@ design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서�
 동작에 관여하지 않는다.
 
 `touches`는 harvest 시점에 도구가 초안을 채운다. `modfit.overrides`로 모드
-스크립트가 재정의하는 (클래스, 메서드) 쌍을 뽑고, 에셋의 `install_to`를 모아
+스크립트가 재정의하는 자리를 뽑고, 에셋의 `install_to`를 모아
 `{"methods": [...], "files": [...]}`를 만든다. 카드에 이미 `touches`가 있으면
 (사람이 손으로 채웠거나 앞서 자동으로 채워졌으면) 덮어쓰지 않는다 — 손 선언이
 공짜 초안보다 우선한다.
 
-검증: `tests/test_touches_draft.py`, `tests/test_import_standalone.py`
+자리 표기는 두 가지다. 인스턴스 메서드는 `Scene_Map#update`, 싱글턴 메서드는
+`Input.update`. 싱글턴은 `class << self` 안의 `def`와 `def self.` 꼴 둘 다를
+말한다. 루비에서 이름이 같은 인스턴스·싱글턴 메서드는 서로 다른 메서드라
+한 표기로 뭉개면 겹침 경고와 기준선이 엉뚱한 짝을 맞춘다. 그릇은 `class`뿐
+아니라 `module`도 센다 — `module Input`의 `class << self`에서 코어를 감싸는
+모드가 실물에 있다(2026-08-04, Pokémon Z Fangame의 Controller UX Z).
+
+검증: `tests/test_modfit_overrides.py`(자리 추출 규칙),
+`tests/test_touches_draft.py`, `tests/test_import_standalone.py`
 
 ## 3. 설치 계약 3종과 검사 3겹
 
@@ -203,8 +211,9 @@ CLI(`modkit diagnose`)는 외래가 있으면 종료 코드 2, 없으면 0, `--q
   이를 자동으로 비교·병합하는 명령은 아직 없다.
 
 검증: `tests/test_inject.py`(`expects` 불일치 차단), `tests/test_touches_draft.py`
-(touches 초안). 베이스라인 판정(`fits`/`changed`/`unknown`) 자체를 거치는
-회귀 테스트는 아직 없다 — `modkit/modfit.py`의 동작은 코드 읽기로만 확인했다.
+(touches 초안), `tests/test_modfit_overrides.py`(어떤 자리를 기준선으로 뜨는지).
+베이스라인 판정(`fits`/`changed`/`unknown`) 자체를 거치는 회귀 테스트는 아직
+없다 — 그 경로는 코드 읽기로만 확인했다.
 
 ---
 

@@ -20,8 +20,16 @@ from pathlib import Path
 from . import scripts
 
 BASELINE = "baseline"
-CLASS_LINE = re.compile(r"^(?P<indent>[ \t]*)class\s+(?P<name>[A-Z][\w:]*)", re.MULTILINE)
-DEF_LINE = re.compile(r"^(?P<indent>[ \t]*)def\s+(?P<name>[\w?!=\[\]<>+\-*/]+)", re.MULTILINE)
+# `class X`·`module X`, 그리고 이름 없는 `class << self`. 셋 다 def를 담는 그릇이다.
+BLOCK_LINE = re.compile(
+    r"^(?P<indent>[ \t]*)(?:(?:class|module)\s+(?P<name>[A-Z][\w:]*)|class\s*<<\s*self\b)",
+    re.MULTILINE,
+)
+DEF_LINE = re.compile(
+    r"^(?P<indent>[ \t]*)def\s+(?P<singleton>self\.)?(?P<name>[\w?!=\[\]<>+\-*/]+)",
+    re.MULTILINE,
+)
+PLACE = re.compile(r"([#.])")
 
 FITS, CHANGED, UNKNOWN = "fits", "changed", "unknown"
 
@@ -34,12 +42,17 @@ class Fit:
 
 
 def overrides(mod_scripts) -> set:
-    """이 모드가 다시 정의하는 (클래스, 메서드)들."""
+    """이 모드가 다시 정의하는 자리들.
+
+    자리 표기는 두 가지다 — 인스턴스 메서드는 `Klass#method`, 싱글턴(`class << self`
+    안이나 `def self.` 꼴)은 `Klass.method`. 루비에서 둘은 이름이 같아도 서로 다른
+    메서드라서, 한 표기로 뭉개면 겹침 판정과 기준선이 엉뚱한 짝을 맞춘다.
+    """
     found = set()
     for _, source in mod_scripts:
         for block in _class_blocks(source):
-            for method in _methods_in(block.body):
-                found.add((block.name, method))
+            for match in DEF_LINE.finditer(block.body):
+                found.add(f"{block.name}{_sep(block, match)}{match.group('name')}")
     return found
 
 
@@ -58,8 +71,7 @@ def take_baseline(game_dir: Path | str, mod_scripts, skip: str = "") -> dict:
         for name, text in scripts.sources(game_dir)
         if not (skip and name.startswith(f"{skip}/"))
     ]
-    found = find_methods(sources, wanted)
-    return {f"{class_name}#{method}": source for (class_name, method), source in found.items()}
+    return find_methods(sources, wanted)
 
 
 def check(game_dir: Path | str, mod, skip_self: bool = True, sources=None) -> Fit:
@@ -90,13 +102,11 @@ def check(game_dir: Path | str, mod, skip_self: bool = True, sources=None) -> Fi
         if not (skip_self and name.startswith(f"{mod.name}/"))
     ]
 
-    wanted = [tuple(place.partition("#")[::2]) for place in baseline]
-    now_by_place = find_methods(sources, wanted)
+    now_by_place = find_methods(sources, list(baseline))
 
     findings = []
     for place, was in sorted(baseline.items()):
-        class_name, _, method = place.partition("#")
-        now = now_by_place.get((class_name, method))
+        now = now_by_place.get(place)
         if now is None:
             findings.append(f"{place}가 이 버전에는 없어요 — 모드가 수정할 대상이 사라졌어요")
         elif _tidy(now) != _tidy(was):
@@ -128,31 +138,41 @@ def write_baseline(folder: Path | str, baseline: dict) -> Path:
     return room
 
 
-def find_method(sources, class_name: str, method: str) -> str | None:
-    """여러 스크립트에서 `class X`의 `def m` 원문을 찾는다."""
-    return find_methods(sources, [(class_name, method)]).get((class_name, method))
+def find_method(sources, place: str) -> str | None:
+    """여러 스크립트에서 한 자리(`Klass#method` 또는 `Klass.method`)의 원문을 찾는다."""
+    return find_methods(sources, [place]).get(place)
 
 
 def find_methods(sources, wanted) -> dict:
-    """찾을 것들을 한 번에 찾는다 — `(클래스, 메서드)` → 원문.
+    """찾을 것들을 한 번에 찾는다 — 자리 → 원문.
 
     메서드마다 따로 찾으면 게임의 스크립트 전부를 그 횟수만큼 다시 훑는다. 게임 하나의
     스크립트가 수천 개라 그 되풀이가 화면을 4초씩 붙잡고 있었다(2026-07-29).
+
+    클래스 이름은 꼬리로 견준다 — 모드가 `Foo::Bar`로 적고 게임이 `Bar`로 열어 두는
+    일이 흔하다. 돌려주는 키는 부르는 쪽이 물어본 자리 그대로다.
 
     같은 메서드가 여러 번 정의돼 있으면 **마지막 것**이 이긴다 — 게임이 배열 순서대로
     읽어서 나중 정의가 앞의 것을 덮기 때문이다.
     """
     by_tail = {}
-    for class_name, method in wanted:
-        by_tail.setdefault(class_name.split("::")[-1], set()).add((class_name, method))
+    for place in wanted:
+        name, sep, method = _split(place)
+        by_tail.setdefault(name.split("::")[-1], {})[sep + method] = place
 
     found = {}
     for _, text in sources:
         for block in _class_blocks(text):
-            for pair in by_tail.get(block.name.split("::")[-1], ()):
-                source = _method_source(block.body, pair[1])
+            here = by_tail.get(block.name.split("::")[-1])
+            if not here:
+                continue
+            for match in DEF_LINE.finditer(block.body):
+                place = here.get(_sep(block, match) + match.group("name"))
+                if place is None:
+                    continue
+                source = _method_source(block.body, match)
                 if source is not None:
-                    found[pair] = source
+                    found[place] = source
     return found
 
 
@@ -160,30 +180,51 @@ def find_methods(sources, wanted) -> dict:
 class _Block:
     name: str
     body: str
+    singleton: bool = False
 
 
-def _class_blocks(text: str):
-    """`class X` … 짝이 맞는 `end`까지."""
-    for match in CLASS_LINE.finditer(text):
+def _class_blocks(text: str, name: str = "", singleton: bool = False):
+    """`class X`·`module X`·`class << self` … 짝이 맞는 `end`까지.
+
+    몸통에는 **직계 `def`만** 남긴다 — 안쪽 블록 구간은 도려내고 그 블록을 따로 내놓는다.
+    그러지 않으면 `class << self` 안의 싱글턴 메서드가 바깥 이름으로도 잡히고, 중첩
+    클래스의 메서드가 바깥 클래스의 것으로도 잡힌다.
+
+    `class << self`는 자기 이름이 없어 감싼 블록의 이름을 물려받는다.
+    """
+    mine, at = [], 0
+    for match in BLOCK_LINE.finditer(text):
+        if match.start() < at:  # 이미 안쪽 블록으로 넘긴 구간
+            continue
         indent = match.group("indent")
-        rest = text[match.end():]
-        closing = f"\n{indent}end"
-        at = rest.find(closing)
-        yield _Block(name=match.group("name"), body=rest[: at if at >= 0 else len(rest)])
+        closing = text.find(f"\n{indent}end", match.end())
+        stop = len(text) if closing < 0 else closing
+        mine.append(text[at:match.start()])
+        at = stop
+        inner = match.group("name")
+        yield from _class_blocks(
+            text[match.end():stop],
+            name=name if inner is None else inner,
+            singleton=inner is None,
+        )
+    mine.append(text[at:])
+    if name:
+        yield _Block(name=name, body="".join(mine), singleton=singleton)
 
 
-def _methods_in(body: str) -> set:
-    return {match.group("name") for match in DEF_LINE.finditer(body)}
+def _sep(block: _Block, def_match) -> str:
+    """이 `def`가 앉은 자리의 구분자 — 싱글턴이면 `.`, 아니면 `#`."""
+    return "." if block.singleton or def_match.group("singleton") else "#"
 
 
-def _method_source(body: str, method: str) -> str | None:
-    """`def <method>`부터 같은 들여쓰기의 `end`까지."""
-    pattern = re.compile(
-        r"^(?P<indent>[ \t]*)def " + re.escape(method) + r"(?![\w?!=])", re.MULTILINE
-    )
-    match = pattern.search(body)
-    if not match:
-        return None
+def _split(place: str):
+    """`Klass#method` / `Klass.method` → (클래스, 구분자, 메서드)."""
+    name, sep, method = PLACE.split(place, maxsplit=1)
+    return name, sep, method
+
+
+def _method_source(body: str, match) -> str | None:
+    """`def …`부터 같은 들여쓰기의 `end`까지."""
     indent = match.group("indent")
     lines = body[match.start():].splitlines(keepends=True)
     closing = indent + "end"
