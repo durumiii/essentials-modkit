@@ -9,10 +9,26 @@ import sys
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from modkit import declare, gameinfo, manifest, modstore
+from modkit import declare, gameinfo, manifest, modassets, modstore
 
 MANIFEST_NAME = "manifest.json"
 LOG_NAME = "modkit-log.jsonl"
+
+
+def _banner_uri(path: str) -> str:
+    """배너 이미지를 data URI로 — file:// 은 WebView 보안 정책에 걸릴 수 있어 인라인이 안전하다."""
+    if not path:
+        return ""
+    try:
+        p = Path(path)
+        raw = p.read_bytes()
+        if len(raw) > 2 << 20:  # 2MB 넘는 그림을 매번 base64로 나르진 않는다
+            return ""
+        kind = {"jpg": "jpeg"}.get(p.suffix.lower().lstrip("."), p.suffix.lower().lstrip("."))
+        import base64
+        return f"data:image/{kind};base64,{base64.b64encode(raw).decode()}"
+    except OSError:
+        return ""
 
 
 class Api:
@@ -78,6 +94,7 @@ class Api:
                 "title": who["title"],
                 "label": who["label"],
                 "known": who["known"],
+                "banner": _banner_uri(who["banner"]),
                 "installed": installed,
                 "has_manifest": (game_dir / MANIFEST_NAME).is_file(),
                 # 게임 폴더인지 어림 판정 — 엉뚱한 폴더를 골랐을 때 화면이 알려 준다
@@ -130,10 +147,14 @@ class Api:
                 installed = modstore.installed(game_dir)
             except modstore.NoBundle:
                 installed = []
-            available = [
-                {"name": mod.name, "description": mod.description, "installed": mod.name in installed}
-                for mod in modstore.shelf(self.store_dir, game=title)
-            ]
+            available = []
+            for mod in modstore.shelf(self.store_dir, game=title):
+                on = mod.name in installed
+                if not on and not mod.scripts and mod.assets:
+                    # 에셋 전용 모드는 묶음·주입 섹션에 이름이 안 남는다 — 파일로 답한다.
+                    on = modassets.applied(mod, game_dir)
+                available.append(
+                    {"name": mod.name, "description": mod.description, "installed": on})
             return {"ok": True, "installed": installed, "available": available}
         except Exception as err:
             return {"ok": False, "error": str(err)}

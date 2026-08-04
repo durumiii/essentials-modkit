@@ -253,3 +253,26 @@ def test_game_status_carries_identity(tmp_path):
     game = make_core_game(tmp_path)      # 제목 "Old Game" — 아는 게임이 아니다
     r = api.game_status(str(game))
     assert r["ok"] and r["label"] == "Old Game" and r["known"] is False
+
+
+def test_mods_marks_asset_mod_installed(tmp_path):
+    """에셋 전용 모드는 묶음·주입 섹션에 이름이 안 남는다 — 설치 표시가 파일로 잡혀야
+    설치 버튼이 '제거'로 바뀐다(2026-08-04 실기 제보)."""
+    api, store, state = make_api(tmp_path)
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"old")
+    folder = store / "Old Game" / "Skin"
+    folder.mkdir(parents=True)
+    (folder / "look.png").write_bytes(b"new-look")
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "Skin", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "look.png", "install_to": "Graphics/look.png"}]}),
+        encoding="utf-8")
+
+    before = api.mods(str(game))
+    assert before["ok"] and before["available"][0]["installed"] is False
+
+    assert api.apply_mod(str(game), "Skin")["ok"]
+    after = api.mods(str(game))
+    assert after["available"][0]["installed"] is True

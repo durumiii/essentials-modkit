@@ -79,6 +79,7 @@
 
 <section id=s-mods class="screen">
   <div class=panel>
+    <img id=mods-banner-img alt="" style="display:none;width:100%;max-height:150px;object-fit:cover;border-radius:10px;margin-bottom:12px">
     <h2>모드 서랍</h2>
     <p class=sub id=mods-game></p>
     <div id=mods-banner></div>
@@ -88,7 +89,7 @@
       <button onclick="pickModFolder()">폴더 선택</button>
     </div>
     <div id=mods-list></div>
-    <button onclick="showScreen('s-folder')">폴더 바꾸기</button>
+    <button onclick="showScreen('s-folder')">다른 게임 열기</button>
   </div>
 </section>
 
@@ -218,6 +219,13 @@ function skipDiagnose() { showModsScreen(); }
 
 function showModsScreen(banner) {
   showScreen("s-mods");
+  const img = document.getElementById("mods-banner-img");
+  if (currentGame && currentGame.banner) {
+    img.src = currentGame.banner;
+    img.style.display = "block";
+  } else {
+    img.style.display = "none";
+  }
   const who = document.getElementById("mods-game");
   if (currentGame && currentGame.known) {
     who.textContent = `${currentGame.label} (${currentGame.title})`;
@@ -265,7 +273,9 @@ function applyMod(name) {
       else toast("설치 실패 — " + r.error);
       return;
     }
-    if (r.warnings && r.warnings.length) toast(r.warnings.join(" / "));
+    toast(r.warnings && r.warnings.length
+      ? `"${name}" 설치했어요 — ` + r.warnings.join(" / ")
+      : `"${name}" 설치했어요.`);
     loadMods();
   });
 }
@@ -273,6 +283,7 @@ function applyMod(name) {
 function removeMod(name) {
   api().remove_mod(currentPath, name).then(r => {
     if (!r.ok) { toast("제거 실패 — " + r.error); return; }
+    toast(`"${name}" 제거했어요.`);
     loadMods();
   });
 }
