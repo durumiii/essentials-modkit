@@ -18,7 +18,7 @@ DEFAULT_EXCLUDE = (
     # 다중 세이브 플러그인이 Game1.rxdata 식으로 슬롯을 늘린다(WS 실물). 뒤에 *를 안 붙이는 건
     # 세이브 백업 Game.rxdata.bak을 BACKUP_SUFFIXES 쪽으로 흘려보내기 위해서다.
     "Game*.rxdata",
-    # v16 계열 고유 — v21 둘(WS·AR)은 코드도 파일도 0건. Z는 뿌리에 실물이 있고,
+    # v16 계열 고유 — v21 둘(WS·AR)은 코드도 파일도 0건. 뿌리 실물 2게임(Z·Opalo 2026-08-04),
     # Data/ 변형은 읽는 코드(Scene_Intro)만 있고 실물은 미관측이라 보험으로 함께 건다.
     "*LastSave.dat",
     # OS 부산물 — 관측된 것은 대부분 하위 폴더라 두 형태를 병기한다(WS 7 · AR 5 · Z 6 실물)
