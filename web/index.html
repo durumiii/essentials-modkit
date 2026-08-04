@@ -93,7 +93,10 @@
       <button onclick="pickModFolder()">폴더 선택</button>
     </div>
     <div id=mods-list></div>
-    <button onclick="showScreen('s-folder')">다른 게임 열기</button>
+    <div class=row>
+      <button onclick="showScreen('s-folder')">다른 게임 열기</button>
+      <button onclick="openGameFolder()">게임 폴더 열기</button>
+    </div>
   </div>
 </section>
 
@@ -113,6 +116,7 @@
     <div class=row>
       <button id=edit-save class=primary>저장</button>
       <button id=edit-cancel>취소</button>
+      <button id=edit-open>모드 폴더 열기</button>
       <button id=edit-delete class=danger style="margin-left:auto">서랍에서 삭제</button>
     </div>
   </div>
@@ -323,12 +327,19 @@ function ask(lines) {
   });
 }
 
+function openGameFolder() {
+  api().open_path(currentPath).then(r => { if (!r.ok) toast("열기 실패 — " + r.error); });
+}
+
 function editMod(name) {
   const box = document.getElementById("edit");
   document.getElementById("edit-name").value = name;
   document.getElementById("edit-game").value = (currentGame && currentGame.title) || "";
   box.style.display = "block";
   document.getElementById("edit-cancel").onclick = () => { box.style.display = "none"; };
+  document.getElementById("edit-open").onclick = () => {
+    api().open_path("", name).then(r => { if (!r.ok) toast("열기 실패 — " + r.error); });
+  };
   document.getElementById("edit-delete").onclick = () => {
     box.style.display = "none";
     ask([`"${name}" 모드를 서랍에서 삭제해요.`, "",

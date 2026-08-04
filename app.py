@@ -176,6 +176,22 @@ class Api:
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
+    def open_path(self, path="", mod_name="") -> dict:
+        """탐색기로 폴더를 연다 — `mod_name`을 주면 그 모드의 보관소 폴더를."""
+        try:
+            if mod_name:
+                path = str(modstore.read_mod(self.store_dir, mod_name).folder)
+            if not path or not Path(path).exists():
+                return {"ok": False, "error": "폴더가 없어요."}
+            if sys.platform == "win32":
+                os.startfile(path)  # noqa: S606 — 탐색기 열기
+            else:
+                import subprocess
+                subprocess.Popen(["xdg-open", path])
+            return {"ok": True}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
     def delete_mod(self, name, game_path="") -> dict:
         """모드를 서랍에서 치운다 — 설치돼 있으면 먼저 걷어내고, 실물은 _trash로 옮긴다."""
         try:
