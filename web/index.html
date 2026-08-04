@@ -351,7 +351,8 @@ function editMod(name, summary) {
   document.getElementById("edit-delete").onclick = () => {
     box.style.display = "none";
     ask([`"${name}" 모드를 서랍에서 삭제해요.`, "",
-         "게임에 설치돼 있으면 먼저 걷어내요. 실물은 보관소의 _trash 폴더로 옮겨요(복구 가능). 계속할까요?"])
+         "게임에 설치돼 있으면 먼저 걷어내요. 실물은 보관소의 _trash 폴더로 옮겨요(복구 가능). 계속할까요?"],
+        "삭제")
       .then(go => {
         if (!go) return;
         api().delete_mod(name, currentPath || "").then(r => {
@@ -378,8 +379,8 @@ function applyMod(name) {
   api().preview_apply(currentPath, name).then(p => {
     if (!p.ok) { toast("확인 실패 — " + p.error); return; }
     if (p.blocked && p.blocked.length) {
-      ask([...p.blocked, "", "제작자 선언이 말리는 설치예요. 그래도 진행할까요? (백업으로 되돌릴 수 있어요)"],
-          "알고도 설치")
+      ask([...p.blocked, "", "제작자 선언이 말리는 설치예요. 그래도 진행할까요?\n(백업으로 되돌릴 수 있어요)"],
+          "그래도 설치")
         .then(go => { if (go) doApply(name, true); });
       return;
     }
@@ -396,12 +397,12 @@ function doApply(name, force) {
   api().apply_mod(currentPath, name, !!force).then(r => {
     if (!r.ok) {
       if (r.mismatch) {
-        ask([...r.mismatch, "", "설치하면 낡은 코드가 되살아날 수 있어요. 그래도 진행할까요? (백업으로 되돌릴 수 있어요)"],
-            "알고도 설치")
+        ask([...r.mismatch, "", "설치하면 낡은 코드가 되살아날 수 있어요. 그래도 진행할까요?\n(백업으로 되돌릴 수 있어요)"],
+            "그래도 설치")
           .then(go => { if (go) doApply(name, true); });
       } else if (r.blocked) {
-        ask([...r.blocked, "", "제작자 선언이 말리는 설치예요. 그래도 진행할까요? (백업으로 되돌릴 수 있어요)"],
-            "알고도 설치")
+        ask([...r.blocked, "", "제작자 선언이 말리는 설치예요. 그래도 진행할까요?\n(백업으로 되돌릴 수 있어요)"],
+            "그래도 설치")
           .then(go => { if (go) doApply(name, true); });
       } else {
         toast("설치 실패 — " + r.error);
