@@ -49,11 +49,18 @@ def gate(mod_card: dict, installed_names: list, store) -> list:
         other_card = _card(store, other)
         other_order = set((other_card.get("order") or {}).get("after") or ())
         other_order |= set((other_card.get("order") or {}).get("before") or ())
-        if other in my_order or me in other_order:
-            continue  # 서로의 순서를 선언한 겹침은 의도된 층이다 — 배치가 알아서 잡는다
         theirs_t = other_card.get("touches") or {}
         theirs = set(theirs_t.get("methods") or []) | set(theirs_t.get("files") or [])
         spots = sorted(mine & theirs)
+        if other in my_order or me in other_order:
+            # 순서를 선언한 겹침은 의도된 층 — 경고 대신 결과를 알리는 한 줄만.
+            # 완전 침묵이던 첫 판은 이로치가 한글패치를 부분 상태로 내리는 걸
+            # 유저가 알 길이 없었다(2026-08-04 아닐 실기).
+            if spots:
+                warnings.append(
+                    f"`{other}` 위에 얹는 모드예요 — 겹치는 자리 {len(spots)}곳은 이 모드가 "
+                    f"이겨요. `{other}`를 나중에 다시 설치하면 그쪽이 다시 이겨요.")
+            continue
         if spots:
             # 상대당 한 줄 — 자리마다 부연을 되풀이하면 못 읽는다(2026-08-04 실기).
             heads = ", ".join(f"`{s}`" for s in spots[:4])

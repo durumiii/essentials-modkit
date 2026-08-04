@@ -76,8 +76,13 @@ def test_overlap_warning_is_one_line_per_counterpart(tmp_path):
     assert "Scene_Map#update" in overlap[0] and "Input.update" in overlap[0]
 
 
-def test_declared_order_silences_overlap(tmp_path):
-    """상대와의 순서를 선언한 겹침은 의도된 층이다 — 경고하지 않는다."""
+def test_declared_order_softens_overlap_to_layer_note(tmp_path):
+    """상대와의 순서를 선언한 겹침은 의도된 층 — 경고 대신 층 안내 한 줄을 준다.
+
+    첫 판은 완전 침묵이었는데, 이로치 설치가 한글패치를 부분 상태로 내리는 걸
+    유저가 알 길이 없었다(2026-08-04 아닐 실기). 순서를 아는 것과 결과를 알리는
+    것은 다르다 — 톤만 경고에서 안내로 내린다.
+    """
     from modkit import modstore
     game = make_core_game(tmp_path)
     store = tmp_path / "store"
@@ -86,4 +91,7 @@ def test_declared_order_silences_overlap(tmp_path):
                                    "order": {"after": ["Mod A"]}})
     modstore.apply(store, "Mod A", game)
     r = modstore.apply(store, "Mod B", game)
-    assert not [w for w in r["warnings"] if "Mod A" in w and "건드려" in w]
+    assert not [w for w in r["warnings"] if "건드리는 자리예요" in w]   # 경고 톤은 여전히 금지
+    layer = [w for w in r["warnings"] if "Mod A" in w and "위에" in w]
+    assert len(layer) == 1                                            # 층 안내 한 줄
+    assert "겹치는 자리 1곳" in layer[0]
