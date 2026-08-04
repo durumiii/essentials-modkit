@@ -58,3 +58,16 @@ def test_identify_known_game(tmp_path):
     who = gameinfo.identify(game)
     assert who == {"title": "Pokemon Z Fangame", "known": True,
                    "label": "Pokémon Z Fangame", "banner": ""}
+
+
+def test_shelf_matches_game_aliases(tmp_path):
+    """순정 제목("Pokemon Z")과 패치 제목("Pokemon Z Fangame")은 같은 게임이다 —
+    카드가 어느 쪽에 매였든 서랍에 보여야 한다(2026-08-04 실기: 순정 사본에서 서랍이 비었다)."""
+    import json
+    from modkit import modstore
+    store = tmp_path / "store"
+    folder = store / "Pokemon Z Fangame" / "Some Mod"
+    folder.mkdir(parents=True)
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "Some Mod", "game": "Pokemon Z Fangame", "scripts": []}), encoding="utf-8")
+    assert [m.name for m in modstore.shelf(store, game="Pokemon Z")] == ["Some Mod"]

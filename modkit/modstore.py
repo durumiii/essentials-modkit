@@ -155,7 +155,7 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     game_dir = Path(game_dir)
 
     here = gameinfo.read_title(game_dir)
-    if mod.game and mod.game != here:
+    if mod.game and gameinfo.canon(mod.game) != gameinfo.canon(here):
         raise WrongGame(
             f"`{mod.name}`은(는) `{mod.game}` 전용 모드예요. 이 게임은 `{here}`입니다.\n"
             "클래스 이름이 같아도 다른 게임에서는 다른 것을 가리킬 수 있어요."
@@ -447,7 +447,9 @@ def shelf(store: Path | str = DEFAULT_STORE, game: str | None = None) -> list:
     for card in sorted(store.glob(f"*/{CARD}")) + sorted(store.glob(f"*/*/{CARD}")):
         told = json.loads(card.read_text(encoding="utf-8"))
         mod = read_mod(store, told["name"])
-        if game is None or mod.game == game:
+        from . import gameinfo as _who
+
+        if game is None or _who.canon(mod.game) == _who.canon(game):
             found.append(mod)
     return found
 

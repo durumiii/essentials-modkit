@@ -59,3 +59,31 @@ def test_touches_overlap_warns(tmp_path):
     modstore.apply(store, "Mod A", game)
     r = modstore.apply(store, "Mod B", game)
     assert any("Scene_Map#update" in w and "Mod A" in w for w in r["warnings"])
+
+
+def test_overlap_warning_is_one_line_per_counterpart(tmp_path):
+    """겹침 경고는 상대 모드당 한 줄 — 자리마다 같은 부연이 되풀이되면 못 읽는다(실기)."""
+    from modkit import modstore
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    both = {"touches": {"methods": ["Scene_Map#update", "Scene_Map#main", "Input.update"]}}
+    put_mod(store, "Mod A", extra=both)
+    put_mod(store, "Mod B", extra=both)
+    modstore.apply(store, "Mod A", game)
+    r = modstore.apply(store, "Mod B", game)
+    overlap = [w for w in r["warnings"] if "Mod A" in w]
+    assert len(overlap) == 1
+    assert "Scene_Map#update" in overlap[0] and "Input.update" in overlap[0]
+
+
+def test_declared_order_silences_overlap(tmp_path):
+    """상대와의 순서를 선언한 겹침은 의도된 층이다 — 경고하지 않는다."""
+    from modkit import modstore
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "Mod A", extra={"touches": {"methods": ["Scene_Map#update"]}})
+    put_mod(store, "Mod B", extra={"touches": {"methods": ["Scene_Map#update"]},
+                                   "order": {"after": ["Mod A"]}})
+    modstore.apply(store, "Mod A", game)
+    r = modstore.apply(store, "Mod B", game)
+    assert not [w for w in r["warnings"] if "Mod A" in w and "건드려" in w]

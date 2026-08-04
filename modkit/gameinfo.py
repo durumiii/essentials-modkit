@@ -57,6 +57,17 @@ def shown_name(title: str) -> str:
     return re.sub(r"\bPokemon\b", "Pokémon", title)
 
 
+def canon(title: str) -> str:
+    """게임 신원 비교용 정규형 — 별칭(순정 제목 vs 패치가 덮은 제목)을 한 게임으로 본다.
+
+    표시명(label)이 같으면 같은 게임이다. 카드의 `game`과 설치본 제목이 다른 표기로
+    적혀 있어도 서랍·귀속 검사가 갈라놓지 않는다(2026-08-04 실기 — 순정 사본
+    "Pokemon Z"에서 "Pokemon Z Fangame"에 매인 모드가 안 보였다).
+    """
+    known = KNOWN_GAMES.get(title)
+    return (known and known["label"]) or shown_name(title)
+
+
 def identify(game_dir: Path | str) -> dict:
     """이 폴더의 신원 — 제목, 표시명(악센트 보정), 배너 이미지 경로."""
     game_dir = Path(game_dir)

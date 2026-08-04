@@ -40,16 +40,25 @@ def gate(mod_card: dict, installed_names: list, store) -> list:
 
     mine = set((mod_card.get("touches") or {}).get("methods") or [])
     mine |= set((mod_card.get("touches") or {}).get("files") or [])
+    my_order = set((mod_card.get("order") or {}).get("after") or ())
+    my_order |= set((mod_card.get("order") or {}).get("before") or ())
     warnings = []
     for other in installed_names:
         if other == me:
             continue
-        theirs_t = _card(store, other).get("touches") or {}
+        other_card = _card(store, other)
+        other_order = set((other_card.get("order") or {}).get("after") or ())
+        other_order |= set((other_card.get("order") or {}).get("before") or ())
+        if other in my_order or me in other_order:
+            continue  # 서로의 순서를 선언한 겹침은 의도된 층이다 — 배치가 알아서 잡는다
+        theirs_t = other_card.get("touches") or {}
         theirs = set(theirs_t.get("methods") or []) | set(theirs_t.get("files") or [])
-        for spot in sorted(mine & theirs):
-            warnings.append(
-                f"`{me}`와 `{other}`가 모두 `{spot}`를 건드려요 — "
-                "순서 선언이 없으면 나중 것이 이겨요")
+        spots = sorted(mine & theirs)
+        if spots:
+            # 상대당 한 줄 — 자리마다 부연을 되풀이하면 못 읽는다(2026-08-04 실기).
+            heads = ", ".join(f"`{s}`" for s in spots[:4])
+            more = f" 외 {len(spots) - 4}곳" if len(spots) > 4 else ""
+            warnings.append(f"`{other}`도 건드리는 자리예요 — {heads}{more}")
     return warnings
 
 

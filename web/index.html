@@ -304,7 +304,7 @@ function bullets(lines) {
   // "본문 — 부연" 꼴은 부연을 들여쓴 하위 불릿으로 내린다.
   return lines.map(l => {
     const parts = l.split(" — ");
-    return "\u2022 " + parts[0] + parts.slice(1).map(r => "\n\u00a0\u00a0\u00a0\u00a0\u2013 " + r).join("");
+    return "\u2022 " + parts[0] + parts.slice(1).map(r => "\n\u00a0\u00a0\u00a0\u00a0\u2022 " + r).join("");
   }).join("\n");
 }
 
@@ -348,7 +348,7 @@ function applyMod(name) {
       return;
     }
     if (p.warnings && p.warnings.length) {
-      ask([...p.warnings, "", "겹치는 자리는 나중에 설치한 쪽이 이겨요. 계속할까요?"])
+      ask([...p.warnings, "", "겹치는 자리는 이번 설치가 덮어써요 — 먼저 설치한 모드는 그 자리를 잃어요. 계속할까요?"])
         .then(go => { if (go) doApply(name); });
     } else {
       doApply(name);
