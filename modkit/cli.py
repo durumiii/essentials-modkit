@@ -10,7 +10,7 @@ import shutil
 import sys
 from pathlib import Path, PurePosixPath
 
-from . import declare, manifest, modstore
+from . import adopt, declare, manifest, modstore
 
 # onefile exe에서는 소스가 아니라 풀린 임시 폴더(_MEIPASS)에 놓인다.
 # --add-data "modkit/templates;modkit/templates"로 구우므로 얼린 상태에서는
@@ -170,6 +170,23 @@ def _cmd_harvest(args) -> int:
     return 0
 
 
+def _cmd_adopt(args) -> int:
+    try:
+        got = adopt.adopt(args.zip, args.game_dir, args.store, name=args.name or "")
+    except adopt.NotAMod as no:
+        print(str(no), file=sys.stderr)
+        return 1
+    print(f"입양: {got.name} → {got.folder}")
+    for note in got.notes:
+        print(f"판독: {note}")
+    for warning in got.warnings:
+        print(f"경고: {warning}")
+    if got.kept:
+        print(f"보관만: {', '.join(got.kept)} (게임 자리를 못 찾아 설치 목록엔 없어요)")
+    print("이름과 설명은 mod.json에서 다듬어 주세요.")
+    return 0
+
+
 def _cmd_apply(args) -> int:
     try:
         done = modstore.apply(args.store, args.name, args.game_dir, force=args.force)
@@ -240,6 +257,13 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument("names", nargs="+")
     p.add_argument("--store", type=Path, default=modstore.DEFAULT_STORE)
     p.set_defaults(func=_cmd_harvest)
+
+    p = sub.add_parser("adopt", help="mod.json 없는 zip을 모드로 입양")
+    p.add_argument("zip", type=Path)
+    p.add_argument("game_dir", type=Path)
+    p.add_argument("--store", type=Path, default=modstore.DEFAULT_STORE)
+    p.add_argument("--name", default="")
+    p.set_defaults(func=_cmd_adopt)
 
     p = sub.add_parser("apply")
     p.add_argument("name")

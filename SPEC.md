@@ -70,6 +70,33 @@ design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서�
 검증: `tests/test_modfit_overrides.py`(자리 추출 규칙),
 `tests/test_touches_draft.py`, `tests/test_import_standalone.py`
 
+## 2.5 맨 zip 입양 (adopt)과 통짜 rxdata 판독 (moddiff)
+
+야생 배포물에는 카드가 없고(2026-08-04 표본 5개 전부), rxdata를 통째로 덮는
+형태가 주류다 — 게임 자체가 통짜 rxdata라 모더도 그 모국어를 쓴다. `adopt`는
+mod.json 없는 zip을 기계 규칙으로 카드화한다. 대상 게임의 실제 트리가 판정
+기준이므로 게임 폴더를 함께 받는다.
+
+배치 규칙(표본에서 나온 세 꼴): 겉포장 폴더 하나가 전부를 감싸면 벗긴다.
+경로가 게임 뿌리(`Data/`·`Graphics/`·`Audio/`·`Fonts/`·`PBS/`·`Plugins/`·
+`mkxp.json`)로 시작하면 그대로. 아니면 게임 트리에 꼬리 대조해 유일하게 맞는
+자리로(`Pictures/x.png` → `Graphics/Pictures/x.png`). 어느 자리도 못 찾은
+파일은 모드 폴더에 보관만 하고 설치 목록(assets)에는 안 올린다. 설치할 파일이
+0개면 `NotAMod`다(공략 문서 묶음 꼴).
+
+원본 지문(`replaces_crc`)은 `.orig`가 있으면 그것, 없으면 지금 파일에서 뜬다
+(`modfit._asset_fit`과 같은 눈). zip 파일이 설치본과 바이트 동일하면 "원본
+그대로 동봉했거나 이미 적용된 판"이라고 한 줄로 경고한다.
+
+통짜 `Data/Scripts.rxdata`·`Data/PluginScripts.rxdata`가 있으면 `moddiff`가
+섹션 단위로 실제 발자국을 잰다. 기반 후보는 게임 원본과 보관소 같은 게임
+모드들의 동봉본이고, **차이가 최소인 후보가 기반이다**(실측: 이로치패치는
+원본 대비 222섹션, 한글패치 대비 3섹션). 기반이 원본이 아니면 카드에
+`requires`·`order.after`를 자동으로 채운다. 이름은 zip 파일명, 설명은 출처
+한 줄 — 사람이 다듬는 몫으로 남긴다.
+
+검증: `tests/test_adopt.py`, `tests/test_moddiff.py`
+
 ## 3. 설치 계약 3종과 검사 3겹
 
 설치 계약은 모드가 무엇을 들고 있는지와 설치본이 무엇을 갖췄는지로 갈린다.
