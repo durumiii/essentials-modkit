@@ -73,26 +73,42 @@ class Api:
         path = picked[0] if picked else None
         return {"ok": bool(path), "path": path or ""}
 
+    RECENT_SHOWN = 5    # 화면에 보여 주는 수 — 기록 자체는 더 길게 남긴다
+    RECENT_KEPT = 20
+
     def recent(self) -> dict:
         try:
-            if not self.state_path.is_file():
-                return {"ok": True, "paths": []}
-            told = json.loads(self.state_path.read_text(encoding="utf-8"))
-            return {"ok": True, "paths": told.get("recent", [])}
+            return {"ok": True, "paths": self._recent_all()[:self.RECENT_SHOWN]}
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
     def remember(self, path) -> dict:
         try:
             path = str(path)
-            paths = self.recent().get("paths", [])
-            paths = [path] + [p for p in paths if p != path]
-            self.state_path.parent.mkdir(parents=True, exist_ok=True)
-            self.state_path.write_text(
-                json.dumps({"recent": paths}, ensure_ascii=False), encoding="utf-8")
-            return {"ok": True, "paths": paths}
+            paths = [path] + [p for p in self._recent_all() if p != path]
+            return self._save_recent(paths[:self.RECENT_KEPT])
         except Exception as err:
             return {"ok": False, "error": str(err)}
+
+    def forget(self, path) -> dict:
+        """기록에서 한 줄 지우기 — 없는 걸 지워도 조용히 성공한다."""
+        try:
+            path = str(path)
+            return self._save_recent([p for p in self._recent_all() if p != path])
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def _recent_all(self) -> list:
+        if not self.state_path.is_file():
+            return []
+        told = json.loads(self.state_path.read_text(encoding="utf-8"))
+        return told.get("recent", [])
+
+    def _save_recent(self, paths) -> dict:
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        self.state_path.write_text(
+            json.dumps({"recent": paths}, ensure_ascii=False), encoding="utf-8")
+        return {"ok": True, "paths": paths[:self.RECENT_SHOWN]}
 
     def game_status(self, path) -> dict:
         try:

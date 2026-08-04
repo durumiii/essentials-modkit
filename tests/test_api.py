@@ -30,6 +30,29 @@ def test_recent_round_trip(tmp_path):
     assert api.recent()["paths"] == [str(tmp_path / "gameA"), str(tmp_path / "gameB")]
 
 
+def test_recent_shows_five_keeps_more(tmp_path):
+    """화면에는 최근 5개만, 저장은 더 길게 — 6번째가 기록에서 사라지면 안 된다."""
+    api, _, state = make_api(tmp_path)
+    for i in range(7):
+        api.remember(str(tmp_path / f"game{i}"))
+    shown = api.recent()["paths"]
+    assert len(shown) == 5
+    assert shown[0] == str(tmp_path / "game6")
+    kept = json.loads(state.read_text(encoding="utf-8"))["recent"]
+    assert len(kept) == 7
+
+
+def test_forget_removes_from_history(tmp_path):
+    api, _, state = make_api(tmp_path)
+    api.remember(str(tmp_path / "gameA"))
+    api.remember(str(tmp_path / "gameB"))
+    r = api.forget(str(tmp_path / "gameA"))
+    assert r["ok"] and r["paths"] == [str(tmp_path / "gameB")]
+    assert str(tmp_path / "gameA") not in state.read_text(encoding="utf-8")
+    # 없는 걸 지워도 조용히 성공 — 두 창이 같은 기록을 만질 수 있다
+    assert api.forget(str(tmp_path / "gameA"))["ok"]
+
+
 def test_pick_folder_no_window(tmp_path):
     api, _, _ = make_api(tmp_path)
     assert api.pick_folder() == {"ok": False, "error": "no-window"}

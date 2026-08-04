@@ -27,6 +27,9 @@
  button.primary:hover{background:var(--acc2)}
  button.danger{border-color:var(--err);color:var(--err)}
  button.big{width:100%;padding:16px;font-size:15.5px;margin-bottom:10px}
+ .recent-row{display:flex;gap:8px;align-items:stretch}
+ .recent-row button.big{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ .recent-x{flex:none;width:44px;margin-bottom:10px;font-size:17px;color:var(--sub)}
  button:disabled{opacity:.5;cursor:default}
  .row{display:flex;gap:10px;flex-wrap:wrap}
  .light{display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:700;
@@ -171,11 +174,21 @@ function loadRecent() {
     label.textContent = "최근 사용한 폴더";
     box.appendChild(label);
     r.paths.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "recent-row";
       const b = document.createElement("button");
       b.className = "big";
       b.textContent = p;
+      b.title = p;
       b.onclick = () => openFolder(p);
-      box.appendChild(b);
+      const x = document.createElement("button");
+      x.className = "recent-x";
+      x.textContent = "×";
+      x.title = "기록에서 지우기";
+      x.onclick = () => api().forget(p).then(loadRecent);
+      row.appendChild(b);
+      row.appendChild(x);
+      box.appendChild(row);
     });
   });
 }
