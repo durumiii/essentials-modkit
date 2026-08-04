@@ -123,6 +123,17 @@ def test_force_overrides_wrong_game(tmp_path):
     assert any("강행" in w for w in done["warnings"])
 
 
+def test_wholesale_wipe_warning_stays_readable(tmp_path):
+    """씻김 경고는 이름 몇 개 + '외 N개'로 집계한다 — Añil 실기(2026-08-04)에서
+    게임 동봉 플러그인 52개가 전부 나열돼 경고문이 화면을 삼켰다."""
+    names = [f"Plugin {i:02d}" for i in range(52)]
+    note = modstore._wipe_note("Data/PluginScripts.rxdata", names)
+    assert note.count("`") == 8          # 이름 4개까지만 (백틱 4쌍)
+    assert "외 48개" in note
+    short = modstore._wipe_note("Data/PluginScripts.rxdata", names[:3])
+    assert "외" not in short             # 넘치지 않으면 집계 없이 그대로
+
+
 def test_wholesale_asset_warns_about_wiped_mods(tmp_path):
     """코어를 통째로 덮는 에셋 모드는 그 안에 살던 주입 모드들을 씻어 낸다 —
     설치 전에 무엇이 지워지고 무엇이 담겨 오는지 말해야 한다(2026-08-04 실기:

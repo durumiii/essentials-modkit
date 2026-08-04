@@ -139,13 +139,23 @@ def wholesale_effects(mod, game_dir: Path | str) -> list:
             continue
         wiped = [n for n in current if n != mod.name and n not in embedded]
         if wiped:
-            heads = ", ".join(f"`{n}`" for n in wiped)
-            notes.append(f"{install_to}를 통째로 갈아 끼워요 — 설치돼 있는 {heads}도 "
-                         "함께 제거돼요. 이 모드를 설치한 뒤 다시 설치하면 돌아와요.")
+            notes.append(_wipe_note(install_to, wiped))
         for name in embedded:
             if name != mod.name:
                 notes.append(f"이 모드의 {install_to} 안에 `{name}`의 주입이 담겨 있어요 — 함께 설치돼요.")
     return notes
+
+
+def _wipe_note(install_to: str, wiped: list) -> str:
+    """씻김 경고 한 줄 — 이름 4개까지, 넘치면 '외 N개'로 집계한다.
+
+    Añil처럼 게임이 플러그인 수십 개를 동봉한 설치본에서 전부 나열하면
+    경고문이 화면을 삼킨다(2026-08-04 실기, 52개).
+    """
+    heads = ", ".join(f"`{n}`" for n in wiped[:4])
+    more = f" 외 {len(wiped) - 4}개" if len(wiped) > 4 else ""
+    return (f"{install_to}를 통째로 갈아 끼워요 — 들어 있는 {heads}{more}도 "
+            "함께 제거돼요. 이 모드를 설치한 뒤 다시 설치하면 돌아와요.")
 
 
 def installed(game_dir: Path | str) -> list:
