@@ -356,3 +356,14 @@ def test_apply_mod_reports_mismatch_for_force_choice(tmp_path):
 
     r = api.apply_mod(str(game), "Skin", force=True)
     assert r["ok"] is True
+
+
+def test_find_game_exe(tmp_path):
+    from app import _find_game_exe
+    game = tmp_path / "g"
+    game.mkdir()
+    assert _find_game_exe(game) is None
+    (game / "Reminiscencia.exe").write_bytes(b"x")
+    assert _find_game_exe(game).name == "Reminiscencia.exe"   # Game.exe 없으면 유일한 exe
+    (game / "Game.exe").write_bytes(b"x")
+    assert _find_game_exe(game).name == "Game.exe"            # 있으면 관례가 우선

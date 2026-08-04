@@ -96,6 +96,7 @@
     </div>
     <div id=mods-list></div>
     <div class=row>
+      <button class=primary onclick="launchGame()">게임 실행</button>
       <button onclick="showScreen('s-folder')">다른 게임 열기</button>
       <button onclick="openGameFolder()">게임 폴더 열기</button>
     </div>
@@ -334,6 +335,13 @@ function ask(lines, goLabel) {
     const done = yes => { box.style.display = "none"; resolve(yes); };
     document.getElementById("ask-go").onclick = () => done(true);
     document.getElementById("ask-no").onclick = () => done(false);
+  });
+}
+
+function launchGame() {
+  api().launch_game(currentPath).then(r => {
+    if (!r.ok) { toast("실행 실패 — " + r.error); return; }
+    toast(`게임을 띄웠어요 (${r.exe}).`);
   });
 }
 

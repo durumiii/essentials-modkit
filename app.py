@@ -31,6 +31,19 @@ def _banner_uri(path: str) -> str:
         return ""
 
 
+def _find_game_exe(game_dir: Path):
+    """게임 실행 파일 — 관례(Game.exe)가 우선, 없으면 뿌리의 exe 중 가장 큰 것.
+
+    구식 배포판은 이름이 게임 제목이다(Reminiscencia.exe 실측). 크기 기준은
+    런처·설정 도구 같은 잔챙이 exe를 피하려는 어림이다.
+    """
+    told = game_dir / "Game.exe"
+    if told.is_file():
+        return told
+    exes = sorted(game_dir.glob("*.exe"), key=lambda p: p.stat().st_size, reverse=True)
+    return exes[0] if exes else None
+
+
 class Api:
     def __init__(self, store_dir, state_path):
         self.store_dir = Path(store_dir)
@@ -199,6 +212,19 @@ class Api:
                 import subprocess
                 subprocess.Popen(["xdg-open", path])
             return {"ok": True}
+        except Exception as err:
+            return {"ok": False, "error": str(err)}
+
+    def launch_game(self, path) -> dict:
+        """게임을 띄운다 — 모드를 얹은 결과를 바로 확인하는 마지막 반 발짝."""
+        try:
+            game_dir = Path(path)
+            exe = _find_game_exe(game_dir)
+            if exe is None:
+                return {"ok": False, "error": "실행 파일(Game.exe)을 못 찾았어요."}
+            import subprocess
+            subprocess.Popen([str(exe)], cwd=str(game_dir))
+            return {"ok": True, "exe": exe.name}
         except Exception as err:
             return {"ok": False, "error": str(err)}
 
