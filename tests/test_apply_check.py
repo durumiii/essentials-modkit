@@ -123,6 +123,20 @@ def test_remove_partial_state_guides_instead_of_lying(tmp_path):
     assert "설치돼 있지 않아요" not in said            # 거짓말은 하지 않는다
 
 
+def test_remove_partial_with_backups_proceeds(tmp_path):
+    """modkit이 설치한(백업 있는) 모드는 다른 모드가 일부를 덮었어도 제거된다.
+
+    2026-08-04 실기: KR 설치(백업 완비) → GUI가 3장 덮음 → KR 제거가 '반쪽'
+    거부. 반쪽 게이트는 백업 없는 손패치를 위한 것 — 백업이 어긋난 자리를
+    전부 덮으면 되돌릴 길이 있으니 막을 이유가 없다.
+    """
+    game, store = put_two_overlapping_asset_mods(tmp_path)
+    modstore.apply(store, "Skin A", game)          # 백업(.orig) 생성
+    modstore.apply(store, "Skin B", game, force=True)  # A의 자리를 덮음 → A는 0/1
+    done = modstore.remove("Skin A", game, store=store)
+    assert done["did"] == "제거됨"
+
+
 def test_remove_keeps_preexisting_identical_file(tmp_path):
     """이미 손패치로 놓여 있던 파일(모드 것과 동일)은 제거해도 살아남아야 한다.
 

@@ -70,6 +70,35 @@ def applied_ratio(mod, game_dir: Path | str) -> tuple:
     return matched, len(pairs)
 
 
+def unbacked_mismatches(mod, game_dir: Path | str) -> list:
+    """어긋난 자리 중 백업이 없어 되돌릴 길이 없는 곳 — 제거 가능 판정의 재료.
+
+    백업 없는 손패치 반쪽은 소유를 몰라 못 빼지만, modkit이 설치해 백업을 남긴
+    모드는 다른 모드가 일부를 덮었어도 뺄 수 있다(2026-08-04 실기 — KR 위에 GUI를
+    얹었더니 KR 제거가 '반쪽'으로 거부됐다).
+    """
+    game_dir = Path(game_dir).resolve()
+    stuck = []
+    for source, where in declared(mod):
+        target = _inside(game_dir, where)
+        if matches(source, target):
+            continue
+        if not target.exists():
+            continue  # 자리 자체가 비었으면 되돌릴 것도 없다
+        if not target.with_name(target.name + BACKUP_SUFFIX).is_file():
+            stuck.append(where)
+    return stuck
+
+
+def any_backups(mod, game_dir: Path | str) -> bool:
+    """이 모드의 자리 어딘가에 백업이 있는가 — modkit이 설치했던 흔적."""
+    game_dir = Path(game_dir).resolve()
+    return any(
+        _inside(game_dir, where).with_name(
+            _inside(game_dir, where).name + BACKUP_SUFFIX).is_file()
+        for _, where in declared(mod))
+
+
 def _sample(path: Path, size: int = 4096) -> bytes:
     """파일의 머리·꼬리 표본 — 같은 크기의 다른 내용을 싸게 가른다."""
     with open(path, "rb") as handle:
