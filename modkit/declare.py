@@ -20,13 +20,27 @@ def _card(store, name):
     return json.loads((mod.folder / "mod.json").read_text(encoding="utf-8"))
 
 
+def _provided(store, installed_names: list) -> set:
+    """설치된 모드들이 `provides`로 선언한 능력의 합집합."""
+    out = set()
+    for one in installed_names:
+        out |= set(_card(store, one).get("provides") or ())
+    return out
+
+
 def gate(mod_card: dict, installed_names: list, store) -> list:
     """requires·conflicts를 검사하고, 통과하면 touches 겹침 경고 목록을 준다."""
     me = mod_card.get("name", "")
     blocks = []
-    for need in mod_card.get("requires") or []:
-        if need not in installed_names:
-            blocks.append(f"`{me}`에는 `{need}`가 먼저 필요해요")
+    # requires는 모드 이름이거나 능력 이름이다 — 「한글 폰트를 제공하는 모드
+    # 아무거나」를 이름으로는 적을 수 없다. 이름으로 먼저 보고, 없으면 설치된
+    # 모드들의 provides에서 찾는다.
+    unmet = [n for n in mod_card.get("requires") or [] if n not in installed_names]
+    if unmet:
+        provided = _provided(store, installed_names)
+        for need in unmet:
+            if need not in provided:
+                blocks.append(f"`{me}`에는 `{need}`가 먼저 필요해요")
     for enemy, why in (mod_card.get("conflicts") or {}).items():
         if enemy in installed_names:
             blocks.append(f"`{enemy}`와 공존할 수 없어요 — {why}")

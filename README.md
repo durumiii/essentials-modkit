@@ -39,7 +39,7 @@ mod.json 필드:
 | `name`, `scripts` | 필수. 에셋만 있는 모드는 scripts를 빈 배열로 |
 | `game` | 강력 권장. 다른 게임에 잘못 설치되는 사고를 막아요 |
 | `description` | 유저의 모드 서랍에 그대로 뜨는 설명 |
-| `touches` `order` `requires` `conflicts` | 여러 모드가 공존할 때의 선언. [SPEC.md](SPEC.md) 2절 |
+| `touches` `order` `requires` `provides` `conflicts` | 여러 모드가 공존할 때의 선언. [SPEC.md](SPEC.md) 2절 |
 
 `lint`는 두 단계로 알려줘요. **오류**는 규약 위반이라 고쳐야 배포할 수 있고,
 **권장**은 경고만 해요(예: 설명이 비면 "유저 서랍에 설명이 안 떠요").

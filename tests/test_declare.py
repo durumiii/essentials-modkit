@@ -14,6 +14,29 @@ def test_requires_blocks(tmp_path):
         modstore.apply(store, "Addon", game)
 
 
+def test_requires_accepts_capability(tmp_path):
+    """requires는 이름 또는 능력 — 「한글 폰트 아무거나」를 이름으로는 못 적는다."""
+    from modkit import modstore
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "DPPT Font", extra={"provides": ["hangul-font"]})
+    put_mod(store, "한글패치", extra={"requires": ["hangul-font"]})
+    modstore.apply(store, "DPPT Font", game)
+    modstore.apply(store, "한글패치", game)                    # 이름이 달라도 능력으로 통과
+    assert "한글패치" in modstore.installed(game)
+
+
+def test_requires_capability_blocks_when_nobody_provides(tmp_path):
+    from modkit import modstore, declare
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "Some Font", extra={"provides": ["latin-font"]})
+    put_mod(store, "한글패치", extra={"requires": ["hangul-font"]})
+    modstore.apply(store, "Some Font", game)
+    with pytest.raises(declare.Blocked, match="hangul-font"):
+        modstore.apply(store, "한글패치", game)
+
+
 def test_conflicts_blocks_with_reason(tmp_path):
     from modkit import modstore, declare
     game = make_core_game(tmp_path)

@@ -611,6 +611,11 @@ def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when
     kept_description = _kept(folder / CARD, "description", "")
     kept_assets = _kept(folder / CARD, "assets", [])
     kept_touches = _kept(folder / CARD, "touches", None)
+    # 선언 필드는 게임에서 다시 읽어 낼 수 없다 — 카드에만 산다. 덮어쓰면 조용히
+    # 사라져서, 다시 꺼낸 뒤로는 의존도 충돌도 검사되지 않는다.
+    kept_declared = {key: _kept(folder / CARD, key, None)
+                     for key in ("requires", "provides", "conflicts", "order", "expects")}
+    kept_declared = {k: v for k, v in kept_declared.items() if v}
 
     for stale in folder.glob("*.rb"):
         stale.unlink()  # 다시 꺼낼 때 옛 이름의 파일이 남지 않게
@@ -639,6 +644,7 @@ def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when
                 "updated_at": when,
                 "baseline_taken": True,
                 "meta": _plain(entry[1]),
+                **kept_declared,
                 "assets": kept_assets,
                 "touches": kept_touches or _draft_touches(scripts, kept_assets),
                 "scripts": written,

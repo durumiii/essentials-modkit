@@ -33,3 +33,23 @@ def test_harvest_keeps_manual_touches(tmp_path):
     modstore.harvest(game, ["Base Mod"], store=store)  # 다시 꺼내도
     card = json.loads(card_path.read_text(encoding="utf-8"))
     assert card["touches"]["methods"] == ["Hand#written"]  # 손 선언 보존
+
+
+def test_harvest_keeps_declarations(tmp_path):
+    """선언 필드는 게임에 없고 카드에만 산다 — 다시 꺼낼 때 지워지면 검사가 조용히 꺼진다."""
+    from modkit import modstore
+    game = make_game(tmp_path)
+    store = tmp_path / "store"
+    modstore.harvest(game, ["Base Mod"], store=store)
+    card_path = store / "Test Game" / "Base Mod" / "mod.json"
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    card.update({"requires": ["hangul-font"], "provides": ["ui-kr"],
+                 "conflicts": {"Other": "같은 씬"}, "order": {"after": ["Base KR"]}})
+    card_path.write_text(json.dumps(card, ensure_ascii=False), encoding="utf-8")
+
+    modstore.harvest(game, ["Base Mod"], store=store)
+    card = json.loads(card_path.read_text(encoding="utf-8"))
+    assert card["requires"] == ["hangul-font"]
+    assert card["provides"] == ["ui-kr"]
+    assert card["conflicts"] == {"Other": "같은 씬"}
+    assert card["order"] == {"after": ["Base KR"]}

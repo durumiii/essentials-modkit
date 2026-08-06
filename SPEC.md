@@ -45,14 +45,15 @@
 | `expects` | 선택 | `{섹션 제목: 원문 md5}`. **주입형에서만** 검사된다(3절). |
 | `touches` | 선택(제작자 선언) | `{"methods": [...], "files": [...]}`. harvest가 초안을 자동으로 채운다(아래). |
 | `order` | 선택(제작자 선언) | `{"after": [...], "before": [...]}`. 이름 붙은 다른 모드 상대의 앞/뒤 제약. |
-| `requires` | 선택(제작자 선언) | 먼저 얹혀 있어야 하는 모드 이름 목록. |
+| `requires` | 선택(제작자 선언) | 먼저 얹혀 있어야 하는 것의 목록. 항목은 **모드 이름이거나 능력 이름**이다 — 이름으로 못 찾으면 설치된 모드들의 `provides`에서 찾는다. |
+| `provides` | 선택(제작자 선언) | 이 모드가 제공하는 능력 이름 목록(예: `["hangul-font"]`). 다른 모드가 `requires`로 가리킬 이름이다. 표준 목록은 없다 — 이름을 맞추는 것은 제작자들 몫이다. |
 | `conflicts` | 선택(제작자 선언) | `{모드 이름: 사유}`. 공존 불가 목록. |
 | `from_version`·`from_build`·`harvested_at`·`updated_at`·`baseline_taken` | harvest가 채우는 출처 기록 | 손으로 적는 필드가 아니다. 어느 설치본·언제 꺼냈는지, 원본 기준선을 떴는지를 남긴다. |
 | `version`·`engine`·`install`·`created_at` | 관례(코드 미사용) | 사람이 읽는 참고 정보. 도구는 안 읽지만 모범 카드가 채운다 — `install`은 `"inject"`/`"assets"`, `version`은 판 표기(이름에 날짜를 박지 않기 위한 자리). |
 
 모범 카드의 권장 필드 순서(2026-08-04 확정): `name / game / version / summary /
-description / engine / install / created_at·updated_at / requires / conflicts /
-order / scripts / assets / touches / expects / baseline_taken`. 도구는 순서를
+description / engine / install / created_at·updated_at / provides / requires /
+conflicts / order / scripts / assets / touches / expects / baseline_taken`. 도구는 순서를
 안 따지지만, 사람이 훑는 카드는 이 순서를 따른다.
 
 design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서도 읽지 않는다
@@ -66,6 +67,11 @@ design.md가 언급한 `engine`·`install` 필드는 지금 코드 어디에서�
 `{"methods": [...], "files": [...]}`를 만든다. 카드에 이미 `touches`가 있으면
 (사람이 손으로 채웠거나 앞서 자동으로 채워졌으면) 덮어쓰지 않는다 — 손 선언이
 공짜 초안보다 우선한다.
+
+harvest는 게임에서 읽어 낼 수 없는 필드를 카드에서 그대로 물려받는다 —
+`description`·`assets`·`touches`에 더해 선언 필드 다섯(`requires`·`provides`·
+`conflicts`·`order`·`expects`)이 그렇다. 선언은 카드에만 살기 때문에, 물려받지
+않으면 다시 꺼낸 순간 의존·충돌 검사가 조용히 꺼진다.
 
 자리 표기는 두 가지다. 인스턴스 메서드는 `Scene_Map#update`, 싱글턴 메서드는
 `Input.update`. 싱글턴은 `class << self` 안의 `def`와 `def self.` 꼴 둘 다를
@@ -155,7 +161,8 @@ mod.json 없는 zip을 기계 규칙으로 카드화한다. 대상 게임의 실
 
 세 계약 모두 적용 전에 `declare.gate`를 거친다. 검사는 세 겹이다.
 
-1. **차단** — `requires`에 든 이름이 아직 설치돼 있지 않거나, 이미 설치된 다른
+1. **차단** — `requires`에 든 항목이 설치된 모드 이름에도 그들의 `provides`에도
+   없거나, 이미 설치된 다른
    모드가 나를 `conflicts`로 지목하거나, 내가 설치된 것을 `conflicts`로 지목하면
    `declare.Blocked`를 던지고 멈춘다. `apply(..., force=True)`면 막는 대신
    "강행: …" 문구로 경고에 담아 통과시킨다.
