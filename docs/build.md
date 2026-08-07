@@ -99,6 +99,8 @@ adopt·moddiff·얹기 전 호환 판정이 들어간 판으로 같은 날 또 �
 v0.2.0 판(능력 선언·층 소유 장부·order 재배치·requires 소프트 블락) — 13.8 MiB
 (14,480,066 바이트), sha256
 `3d40e01c499a6afc38ed472ce5eaff25fed7eaa19066a48a8587429273c63a44`.
+지문 어긋남을 기준선으로 가려내는 판(릴리스 자산) — 14,481,214 바이트, sha256
+`9f1c441774f591cbf5b967c368a51a0feab92932a4e42bb38d56112b4a75a572`.
 CLI 스모크는 `shelf --store <샌드박스 mods>`가 모드 목록을 한글 깨짐 없이 찍고
 종료 코드 0이었다.
 PyInstaller 경고는 `pycparser.lextab`·`pycparser.yacctab` 두 개인데 cffi가 런타임에
