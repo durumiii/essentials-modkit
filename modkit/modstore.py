@@ -349,7 +349,7 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
                 f"`{name}`이 반쪽만 들어 있어요(파일 {matched}/{total} 일치) — 무엇이 "
                 "이 모드 것인지 백업이 없어 안전하게 못 빼요. 먼저 한 번 '설치'해서 "
                 "정식 상태로 만들면, 그다음 제거는 깨끗하게 돼요.")
-        taken = modassets.remove(told, game_dir, keep=_shared_slots(store, game_dir, told))
+        taken = modassets.remove(told, game_dir)
         return {
             "mod": name,
             "did": "제거됨",
@@ -868,7 +868,7 @@ def _uninject(mod: Mod, game_dir: Path, store=None) -> dict:
     # 동작까지 바꾸는 셈이 된다.
     _put(scripts_path, rubywrite.dumps(kept))
 
-    taken = modassets.remove(mod, game_dir, keep=_shared_slots(store, game_dir, mod))
+    taken = modassets.remove(mod, game_dir)
     return {
         "mod": mod.name,
         "did": "제거됨",
@@ -876,19 +876,6 @@ def _uninject(mod: Mod, game_dir: Path, store=None) -> dict:
         "assets": len(taken["removed"]) + len(taken["reverted"]),
         "warnings": _kept_note(taken),
     }
-
-
-def _shared_slots(store, game_dir: Path, mod) -> set:
-    """이 모드와 자리를 나눠 쓰는 **아직 설치된** 다른 모드의 자리들."""
-    store = Path(store or DEFAULT_STORE)
-    try:
-        here = set(present(store, game_dir, game=mod.game))
-    except Exception:
-        return set()          # 보관소를 못 읽으면 예전대로 — 없는 셈 친다
-    return {one.get("install_to")
-            for other in shelf(store, game=mod.game)
-            if other.name != mod.name and other.name in here
-            for one in (other.assets or [])}
 
 
 def _kept_note(taken: dict) -> list:

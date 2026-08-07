@@ -24,6 +24,7 @@ nil을 돌려주고, 잘 짠 플러그인은 거기서 그 표시만 건너뛴�
   - **게임 폴더 밖은 못 가리킨다.** `install_to`는 사람이 손으로 적는 값이라, 밖을 향하면
     거절한다.
 """
+import json
 import os
 import shutil
 from pathlib import Path
@@ -192,19 +193,22 @@ def install(mod, game_dir: Path | str) -> dict:
         _put(target, source.read_bytes())
         written.append(where)
 
+    _claim(game_dir, mod)
     return {"written": written, "skipped": skipped, "backed_up": backed_up}
 
 
-def remove(mod, game_dir: Path | str, keep=()) -> dict:
+def remove(mod, game_dir: Path | str) -> dict:
     """넣었던 에셋을 걷어낸다. 덮었던 자리는 원본을 돌려놓는다.
 
-    `keep`은 아직 설치돼 있는 다른 모드가 함께 쓰는 자리다. 그런 자리는 손대지 않는다 —
-    되돌리면 그 모드의 판까지 순정으로 떨어뜨린다(2026-08-07 실기: 번역 모드와
-    `Controller UX`가 같은 그림 다섯을 **바이트까지 같은 것으로** 들고 있어, 나중 설치가
-    「내용이 같다」로 층을 안 뜨고, 먼저 빠지면서 순정을 되돌려 번역 모드가 반쪽이 됐다).
+    아직 설치돼 있는 다른 모드가 함께 쓰는 자리는 손대지 않는다 — 되돌리면 그 모드의
+    판까지 순정으로 떨어뜨린다(2026-08-07 실기: 번역 모드와 `Controller UX`가 같은 그림
+    다섯을 **바이트까지 같은 것으로** 들고 있어, 나중 설치가 「내용이 같다」로 층을 안 뜨고,
+    먼저 빠지면서 순정을 되돌려 번역 모드가 반쪽이 됐다). 누가 쓰는지는 설치가 적어 둔
+    소유 장부로 안다 — 파일 대조로는 「내용이 같은 다른 모드」와 갈리지 않는다.
     """
     game_dir = Path(game_dir).resolve()
     removed, reverted, kept = [], [], []
+    keep, known = _release(game_dir, mod)
     # 카드가 지문을 들고 있으면 그 자리에는 **원래 순정 파일이 있었다**. 백업이 없다고
     # 「내가 새로 놓은 것」으로 단정해 지우면 순정이 사라진다 — 백업은 자리마다 하나뿐이라
     # 그 자리를 함께 쓰는 다른 모드가 먼저 빠지면서 가져갔을 수 있다(2026-08-07 실기,
@@ -218,6 +222,10 @@ def remove(mod, game_dir: Path | str, keep=()) -> dict:
         target = _inside(game_dir, where)
         backup = target.with_name(target.name + BACKUP_SUFFIX)
         shelved = target.with_name(target.name + f".pre-{mod.name}")
+        if where in known and where not in keep and shelved.is_file():
+            # 마지막 소유자가 나간다 — 층에 든 것은 이미 빠진 모드의 판이라 되살리면
+            # 그 모드가 유령으로 남는다. 층은 버리고 순정(.orig)으로 간다.
+            shelved.unlink()
         if shelved.is_file():
             # 이 모드가 밀어냈던 아래층을 되살린다. 백업(.orig)은 아래층 모드의
             # 몫이라 그대로 둔다. # ponytail: 역순 제거(아래층 먼저)는 층 표식이
@@ -240,6 +248,50 @@ def remove(mod, game_dir: Path | str, keep=()) -> dict:
             _sweep_empty(game_dir, target.parent)
 
     return {"removed": removed, "reverted": reverted, "kept": kept}
+
+
+LEDGER = "modkit-owners.json"   # 자리 → 그 자리를 넣은 모드 이름들
+
+
+def _owners(game_dir: Path) -> dict:
+    """자리마다 누가 넣었는지. 파일 대조로는 「같은 파일을 든 다른 모드」와 안 갈린다 —
+    보관소에 같은 그림을 든 모드가 넷 있으면 설치한 적 없는 셋까지 소유자로 읽힌다
+    (2026-08-07 실기: 345자리가 「남이 쓴다」로 안 돌아왔다)."""
+    try:
+        return json.loads((game_dir / LEDGER).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_owners(game_dir: Path, book: dict) -> None:
+    book = {where: names for where, names in book.items() if names}
+    if book:
+        _put(game_dir / LEDGER, json.dumps(book, ensure_ascii=False, indent=1).encode("utf-8"))
+    elif (game_dir / LEDGER).is_file():
+        (game_dir / LEDGER).unlink()
+
+
+def _claim(game_dir: Path, mod) -> None:
+    book = _owners(game_dir)
+    for _, where in declared(mod):
+        names = book.setdefault(where, [])
+        if mod.name not in names:
+            names.append(mod.name)
+    _write_owners(game_dir, book)
+
+
+def _release(game_dir: Path, mod) -> tuple:
+    """내 소유를 지우고 (아직 남이 쓰는 자리, 장부가 아는 자리)를 돌려준다.
+
+    장부가 없는 옛 설치본은 둘 다 비어 예전 동작 그대로다(자리 공유 보호 없음).
+    """
+    book = _owners(game_dir)
+    known = set(book)
+    for names in book.values():
+        if mod.name in names:
+            names.remove(mod.name)
+    _write_owners(game_dir, book)
+    return {where for where, names in book.items() if names}, known
 
 
 def _restored(blob: bytes, target: Path) -> bytes:

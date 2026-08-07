@@ -34,7 +34,7 @@ DEFAULT_EXCLUDE = (
     # 여기 올리지 않는다. Z 전용 목록(pokemon-z/share/make_manifest_full.py)이 맡는다.
     "*.sav",                # 미관측 — mkxp 계열 관례 보험
     # 도구 자신의 산물
-    "_quarantine/*", "modkit-log.jsonl", "manifest.json",
+    "_quarantine/*", "modkit-log.jsonl", "manifest.json", "modkit-owners.json",
 )
 BACKUP_SUFFIXES = (".orig", ".bak")
 

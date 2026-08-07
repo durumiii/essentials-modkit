@@ -430,3 +430,31 @@ def test_removing_twin_keeps_the_other_mods_slot(tmp_path):
 
     modstore.remove("Skin", game, store=store)                           # 마지막이 빠지면 순정
     assert (game / "Graphics" / "look.png").read_bytes() == b"vanilla"
+
+
+def test_never_installed_twin_does_not_block_revert(tmp_path):
+    """설치한 적 없는 쌍둥이는 자리를 못 잡는다 — 파일이 같다고 소유자가 아니다.
+
+    보관소에 같은 그림을 든 모드가 넷 있으면 파일 대조로는 넷 다 설치로 읽힌다.
+    그것을 소유 판정에 쓰자 제거가 345자리를 「남이 쓴다」로 안 되돌렸다(2026-08-07 QA).
+    """
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"vanilla")
+    store = tmp_path / "store"
+    put_asset_mod(store, "Old Game", crc=zlib.crc32(b"vanilla"))       # "Skin" — 설치할 것
+    twin = store / "Old Game" / "Skin 복사본"                           # 같은 바이트, 안 얹는다
+    twin.mkdir(parents=True)
+    (twin / "look.png").write_bytes(b"new-look")
+    (twin / "mod.json").write_text(json.dumps(
+        {"name": "Skin 복사본", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "look.png", "install_to": "Graphics/look.png",
+                     "replaces_crc": zlib.crc32(b"vanilla")}]}, ensure_ascii=False),
+        encoding="utf-8")
+
+    modstore.apply(store, "Skin", game)
+    r = modstore.remove("Skin", game, store=store)
+
+    assert (game / "Graphics" / "look.png").read_bytes() == b"vanilla"  # 순정으로 돌아온다
+    assert not r["warnings"]
+    assert not (game / "modkit-owners.json").exists()                   # 장부도 비면 사라진다
