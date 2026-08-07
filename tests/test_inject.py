@@ -92,3 +92,51 @@ def test_same_name_in_two_games_picks_this_game(tmp_path):
     modstore.remove("Better Movements", game, store=store)  # 제거도 제 것을 본다
     assert injected(game) == []
     assert injected(other) == [b"# for aaa\r\n"]
+
+
+HOOKED = b"class Talk\n  def say\n    1\n  end\nend\n\nSALUDO = 'hola'\n"
+PATCHED = b"class Talk\n  def say\n    1\n  end\nend\n\nSALUDO = '\xec\x95\x88\xeb\x85\x95'\n"
+OVERRIDE = b"class Talk\n  def say\n    2\n  end\nend\n"
+
+
+def _mod_with_baseline(store, game, name="Hooker"):
+    """덮어쓰는 메서드의 원문을 기준선으로 들고 있는 모드."""
+    import hashlib
+    folder = put_mod(store, name, source=OVERRIDE,
+                     extra={"expects": {"Talk": hashlib.md5(HOOKED).hexdigest()},
+                            "baseline_taken": True})
+    base = folder / "baseline"
+    base.mkdir()
+    (base / "Talk__say.rb").write_bytes(b"  def say\n    1\n  end\n")
+    return folder
+
+
+def test_expects_drift_passes_when_the_hooked_method_is_intact(tmp_path):
+    """섹션의 딴 문구만 바뀐 자리는 막지 않고 알린다.
+
+    한글패치가 같은 섹션의 문자열만 옮겨 놓으면 섹션 md5는 어긋나지만 모드가
+    손대는 메서드는 그대로다. 그때 막으면 멀쩡한 조합을 막는 것이다
+    (2026-08-07 실측: Controller UX의 TextEntry · Better Movements의 Following).
+    """
+    from modkit import modstore
+    game = make_core_game(tmp_path, sections=(("Talk", PATCHED), ("Main", b"# main\n")))
+    store = tmp_path / "store"
+    _mod_with_baseline(store, game)
+
+    r = modstore.apply(store, "Hooker", game)
+    assert r["did"] == "설치됨"
+    assert any("Talk" in w and "그대로라" in w for w in r["warnings"]), r["warnings"]
+
+
+def test_expects_drift_still_blocks_when_the_hooked_method_moved(tmp_path):
+    """훅 거는 메서드까지 바뀌었으면 예전대로 막는다."""
+    from modkit import modstore
+    moved = b"class Talk\n  def say\n    99\n  end\nend\n\nSALUDO = 'hola'\n"
+    game = make_core_game(tmp_path, sections=(("Talk", moved), ("Main", b"# main\n")))
+    store = tmp_path / "store"
+    _mod_with_baseline(store, game)
+
+    with pytest.raises(modstore.BaseChanged):
+        modstore.apply(store, "Hooker", game)
+    r = modstore.apply(store, "Hooker", game, force=True)   # 강행은 경고로
+    assert r["did"] == "설치됨"

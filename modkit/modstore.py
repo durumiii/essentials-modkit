@@ -268,7 +268,8 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
         # Scripts.rxdata에 섹션으로 덧붙인다. 규약은 poke-essentials 주입기와 한 벌.
         # 주입은 늘 Main 앞에 일괄로 들어가므로 꽂을 때 자리를 고르지 않는다. 대신
         # 꽂고 나서 전체를 선언대로 다시 늘어놓는다(`_rearrange_injections`).
-        done = _inject(mod, game_dir)
+        done = _inject(mod, game_dir, force=force)
+        warnings += done.pop("notes", [])
         warnings += _rearrange_injections(store, game_dir)
         done["warnings"] = warnings
         return done
@@ -744,7 +745,36 @@ def _pack_mod(mod: Mod) -> list:
     ]
 
 
-def _inject(mod: Mod, game_dir: Path) -> dict:
+def _expect_drift(mod: Mod, game_dir: Path, drifted: list, force: bool) -> list:
+    """`expects`가 어긋났다 — 훅 거는 자리까지 바뀐 것인지 가려낸다.
+
+    섹션 md5는 섹션 **전체**를 본다. 그래서 한글패치처럼 같은 섹션 안의 다른 문자열만
+    바꾼 패치가 얹혀 있으면, 모드가 손대는 메서드는 한 글자도 안 변했는데 지문이
+    어긋난다(2026-08-07 실측: Controller UX의 `TextEntry`, Better Movements의
+    `Following` — 순정 기준으로 뜬 지문이 한글패치 위에서 어긋났고, 두 모드가
+    덮어쓰는 메서드 아홉은 양쪽에서 한 글자도 다르지 않았다).
+
+    그 자리에서 설치를 막으면 멀쩡한 조합을 막는 것이다. 그래서 기준선이 있는 모드는
+    **덮어쓰는 메서드**를 다시 대조한다 — 그쪽이 그대로면 무엇이 달라졌는지 한 줄로
+    알리고 지나간다. 대조할 기준선이 없으면 예전대로 막는다(근거 없이 통과시키지 않는다).
+    """
+    from . import modfit
+
+    spots = ", ".join(f"`{title}`" for title, _, _ in drifted)
+    fit = modfit.check(game_dir, mod)
+    if fit.verdict == modfit.FITS:
+        return [f"`{mod.name}`이 기억한 원문과 다른 섹션이 있어요 — {spots}. 다만 이 모드가 "
+                f"덮어쓰는 메서드 {fit.checked}개는 그대로라 그냥 얹었어요(다른 패치가 같은 "
+                "섹션의 딴 문구만 바꾼 경우예요)."]
+    detail = "\n".join(f"  섹션 {title}: 지금 {got} (기대 {want})" for title, got, want in drifted)
+    why = (f"`{mod.name}`이 기대하는 원문과 게임이 달라요 —\n{detail}\n"
+           "게임 판이 바뀌었으면 훅부터 다시 확인해요.")
+    if force:
+        return [f"강행: {why}"]
+    raise BaseChanged(why)
+
+
+def _inject(mod: Mod, game_dir: Path, force: bool = False) -> dict:
     """모드 스크립트를 코어 배열의 `Main` 앞에 섹션으로 꽂는다.
 
     - 자기 섹션(`MOD:<이름>/`)이 이미 있으면 걷어 내고 새로 꽂는다 — 두 번 눌러도 안 쌓인다.
@@ -760,6 +790,7 @@ def _inject(mod: Mod, game_dir: Path) -> dict:
     entries = rubyread.loads(scripts_path.read_bytes())
 
     expects = _kept(mod.folder / CARD, "expects", {})
+    notes = []
     if expects:
         md5_by_title = {}
         for entry in entries:
@@ -767,13 +798,10 @@ def _inject(mod: Mod, game_dir: Path) -> dict:
             md5_by_title.setdefault(
                 bytes(entry[1]).decode("utf-8", "replace"), hashlib.md5(source).hexdigest()
             )
-        for title, want in expects.items():
-            got = md5_by_title.get(title)
-            if got != want:
-                raise BaseChanged(
-                    f"`{mod.name}`이 기대하는 원문과 게임이 달라요 — 섹션 {title} "
-                    f"md5 {got} (기대 {want}). 게임 판이 바뀌었으면 훅부터 다시 확인해요."
-                )
+        drifted = [(title, md5_by_title.get(title), want)
+                   for title, want in expects.items() if md5_by_title.get(title) != want]
+        if drifted:
+            notes += _expect_drift(mod, game_dir, drifted, force)
 
     prefix = f"{MOD_MARK}{mod.name}/".encode("utf-8")
     kept = [e for e in entries if not bytes(e[1]).startswith(prefix)]
@@ -802,6 +830,7 @@ def _inject(mod: Mod, game_dir: Path) -> dict:
         "total": len(result),
         "backup": str(backup),
         "assets": len(brought["written"]) + len(brought["skipped"]),
+        "notes": notes,
     }
 
 
