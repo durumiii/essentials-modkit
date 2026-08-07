@@ -208,17 +208,11 @@ def remove(mod, game_dir: Path | str) -> dict:
             # 이 모드가 밀어냈던 아래층을 되살린다. 백업(.orig)은 아래층 모드의
             # 몫이라 그대로 둔다. # ponytail: 역순 제거(아래층 먼저)는 층 표식이
             # 위층 이름에 매여 있어 못 살린다 — 순서대로 빼는 경우만 정확.
-            _put(target, shelved.read_bytes())
+            _put(target, _restored(shelved.read_bytes(), target))
             shelved.unlink()
             reverted.append(where)
         elif backup.is_file():
-            blob = backup.read_bytes()
-            if target.name == "Scripts.rxdata" and target.is_file():
-                # 원본을 돌려놓되, 이 위에 살던 주입 모드는 도로 꽂아 살린다.
-                from . import modstore
-
-                blob = modstore.merge_core(blob, target.read_bytes())
-            _put(target, blob)
+            _put(target, _restored(backup.read_bytes(), target))
             backup.unlink()
             reverted.append(where)
         elif target.is_file():
@@ -227,6 +221,21 @@ def remove(mod, game_dir: Path | str) -> dict:
             _sweep_empty(game_dir, target.parent)
 
     return {"removed": removed, "reverted": reverted}
+
+
+def _restored(blob: bytes, target: Path) -> bytes:
+    """되돌릴 내용에, 지금 코어에 살아 있는 주입 섹션을 도로 꽂아 준다.
+
+    코어를 되돌리는 길이 둘(.orig 백업 / .pre-<모드> 층)인데 병합을 백업 쪽에만 걸었더니,
+    층 쪽으로 간 제거가 층을 뜬 시점 이후에 얹힌 주입을 통째로 지웠다(2026-08-06 재현).
+    층이 뜨는 조건 자체도 주입형이 남긴 `Scripts.rxdata.orig`와 이름이 겹쳐 생긴다 —
+    두 길 모두 살아 있는 주입을 보존하는 것으로 맞춘다.
+    """
+    if target.name != "Scripts.rxdata" or not target.is_file():
+        return blob
+    from . import modstore
+
+    return modstore.merge_core(blob, target.read_bytes())
 
 
 def _inside(game_dir: Path, where: str) -> Path:

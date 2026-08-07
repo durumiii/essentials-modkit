@@ -120,10 +120,6 @@ def test_declared_order_softens_overlap_to_layer_note(tmp_path):
     assert "겹치는 자리 1곳" in layer[0]
 
 
-@pytest.mark.xfail(reason="코어 교체 모드를 빼면 그 뒤에 얹힌 주입 모드가 함께 사라진다 "
-                          "(2026-08-07 실기·샌드박스 재현). merge_core는 살아 있는 주입을 "
-                          "보존하게 돼 있는데 제거 경로에서 그렇게 되지 않는다 — 원인 미규명.",
-                   strict=True)
 def test_core_swap_removal_keeps_later_injections(tmp_path):
     """코어를 통째로 덮는 모드를 뺄 때, 그 뒤에 얹힌 주입 모드는 살아남아야 한다."""
     import io
@@ -155,3 +151,5 @@ def test_core_swap_removal_keeps_later_injections(tmp_path):
               for e in rubyread.load(io.BytesIO((game / "Data/Scripts.rxdata").read_bytes()))]
     living = {t.split("/")[0][4:] for t in titles if t.startswith("MOD:")}
     assert living == {"Inject A", "Inject B"}
+    assert "Extra" not in titles          # 자기 것은 남김없이 빠졌다
+    assert len(titles) == len(set(titles))  # 남의 층을 두 번 꽂지 않았다
