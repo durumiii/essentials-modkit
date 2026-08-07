@@ -20,17 +20,21 @@ STORE = Path("/mnt/d/GameVault/mods/Pokemon Z Fangame")
 OUT = Path(__file__).resolve().parent / "dist" / "mods-z"
 
 # 보관소 이름 → 자산 파일 이름. 실험·진단용(GC Tamer·Frame Profiler)은 안 낸다.
+#
+# 릴리스 화면은 자산을 **파일 이름순**으로 늘어놓는다. 그래서 이름에 차례를 넣어
+# 받는 사람이 위에서부터 읽으면 되게 한다 — 한글패치가 먼저, 그 다음 글꼴(권하는 것부터),
+# 화면을 바꾸는 것, 마지막이 취향 모드다. 지문 파일은 `zz-`로 맨 끝에 선다.
 MODS = {
-    "Battle Speed": "Battle-Speed",
-    "Better Movements": "Better-Movements",
-    "Controller UX": "Controller-UX",
-    "DPPT Font": "DPPT-Font",
-    "Galmuri Font": "Galmuri-Font",
-    "BW Font": "BW-Font",
-    "UI Text KR": "UI-Text-KR",
-    "Z-GUI": "Z-GUI",
-    "디버그 모드": "Debug-Mode",
-    "한글패치 통합-Runa": "KR-Patch-Runa",
+    "한글패치 통합-Runa": "01-KR-Patch-Runa",
+    "Galmuri Font": "02-Galmuri-Font",
+    "DPPT Font": "03-DPPT-Font",
+    "BW Font": "04-BW-Font",
+    "UI Text KR": "05-UI-Text-KR",
+    "Z-GUI": "06-Z-GUI",
+    "Battle Speed": "07-Battle-Speed",
+    "Better Movements": "08-Better-Movements",
+    "Controller UX": "09-Controller-UX",
+    "디버그 모드": "10-Debug-Mode",
 }
 JUNK_TAIL = (".draft", ".orig", ".pyc")
 JUNK_NAME = {"modkit-owners.json", "AGENTS.md", "CLAUDE.md"}
