@@ -210,10 +210,10 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     """
     from . import declare, gameinfo
 
-    mod = read_mod(store, name)
     game_dir = Path(game_dir)
-
     here = gameinfo.read_title(game_dir)
+    mod = read_mod(store, name, game=here)   # 이름이 겹치면 이 게임 것을 고른다
+
     warnings = []
     if mod.game and gameinfo.canon(mod.game) != gameinfo.canon(here):
         # 귀속 불일치도 강행 가능하다 — 매니저의 일은 제한이 아니라 정보와
@@ -318,9 +318,12 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
     """
     game_dir = Path(game_dir)
 
+    from . import gameinfo
+
+    here = gameinfo.read_title(game_dir)
     told = None
     try:
-        told = read_mod(store or DEFAULT_STORE, name)
+        told = read_mod(store or DEFAULT_STORE, name, game=here)
     except ModMissing:
         pass
     if told is not None and told.scripts and not (game_dir / BUNDLE).is_file():
@@ -361,7 +364,7 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
 
     taken = {"removed": [], "reverted": []}
     try:
-        taken = modassets.remove(read_mod(store or DEFAULT_STORE, name), game_dir)
+        taken = modassets.remove(read_mod(store or DEFAULT_STORE, name, game=here), game_dir)
     except ModMissing:
         pass  # 보관소에 없는 모드 — 무엇을 데리고 왔는지 알 길이 없다
     return {
@@ -486,32 +489,47 @@ def harvest(
     return kept
 
 
-def _find_folder(store: Path, name: str):
+def _find_folder(store: Path, name: str, game: str | None = None):
     """모드 폴더를 찾는다. 보관소는 게임별 하위 폴더로 나뉘어 있다
-    (`<보관소>/<게임>/<모드>/mod.json`). 평면에 남은 옛 배치도 함께 본다."""
+    (`<보관소>/<게임>/<모드>/mod.json`). 평면에 남은 옛 배치도 함께 본다.
+
+    `game`을 주면 그 게임 것을 먼저 고른다. 이름이 같은 모드가 게임마다 있을 수 있는데
+    (`Better Movements`), 첫 매치만 돌려주던 판은 게임 폴더 이름 사전순으로 남의 것을
+    집어 귀속 검사에 막혔다 — 그 게임의 제 모드는 이름으로 설치할 길이 없었다.
+    """
     import glob as _glob
 
     safe = _safe(name)
     flat = store / safe
-    if (flat / CARD).is_file():
-        return flat
     # 이름의 대괄호가 glob 문자 클래스로 읽히지 않게 이스케이프한다
-    for card in sorted(store.glob(f"*/{_glob.escape(safe)}/{CARD}")):
-        return card.parent
-    # 폴더 이름과 카드 이름이 어긋난 모드도 찾아진다 — 폴더 하나 때문에 그 모드가
-    # (그리고 shelf를 타는 모든 흐름이) 유령이 되면 안 된다(2026-08-04 실기).
-    for card in sorted(store.glob(f"*/{CARD}")) + sorted(store.glob(f"*/*/{CARD}")):
-        try:
-            if json.loads(card.read_text(encoding="utf-8")).get("name") == name:
-                return card.parent
-        except (json.JSONDecodeError, OSError):
-            continue
-    return None
+    found = ([flat] if (flat / CARD).is_file() else []) + [
+        card.parent for card in sorted(store.glob(f"*/{_glob.escape(safe)}/{CARD}"))]
+    if not found:
+        # 폴더 이름과 카드 이름이 어긋난 모드도 찾아진다 — 폴더 하나 때문에 그 모드가
+        # (그리고 shelf를 타는 모든 흐름이) 유령이 되면 안 된다(2026-08-04 실기).
+        found = [card.parent
+                 for card in sorted(store.glob(f"*/{CARD}")) + sorted(store.glob(f"*/*/{CARD}"))
+                 if _card(card).get("name") == name]
+    if game and len(found) > 1:
+        from . import gameinfo
+
+        want = gameinfo.canon(game)
+        found = [f for f in found
+                 if gameinfo.canon(_card(f / CARD).get("game") or "") == want] or found
+    return found[0] if found else None
 
 
-def read_mod(store: Path | str, name: str) -> Mod:
-    """보관소에 누워 있는 모드 하나를 읽는다."""
-    folder = _find_folder(Path(store), name)
+def _card(card: Path) -> dict:
+    """카드를 읽되 깨진 것은 빈 것으로 — 하나 때문에 보관소가 멎지 않게."""
+    try:
+        return json.loads(card.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def read_mod(store: Path | str, name: str, game: str | None = None) -> Mod:
+    """보관소에 누워 있는 모드 하나를 읽는다. `game`을 주면 그 게임 것을 먼저 고른다."""
+    folder = _find_folder(Path(store), name, game)
     if folder is None:
         raise ModMissing(f"저장된 모드가 아니에요: {name}")
     return _mod_at(folder)
@@ -606,7 +624,7 @@ def _game_folder(game: str) -> str:
 
 def _lay_down(entry, store: Path, came_from: Path, game: str, version: str, when: str) -> Mod:
     name = str(entry[0])
-    folder = _find_folder(store, name) or store / _game_folder(game) / _safe(name)
+    folder = _find_folder(store, name, game) or store / _game_folder(game) / _safe(name)
     folder.mkdir(parents=True, exist_ok=True)
     kept_description = _kept(folder / CARD, "description", "")
     kept_assets = _kept(folder / CARD, "assets", [])

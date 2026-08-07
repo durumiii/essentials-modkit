@@ -15,6 +15,13 @@
 적어 두고(`game` 필드), 얹을 때 그 값과 설치본의 제목을 대조한다. 클래스 이름이
 같다는 것은 얹어도 된다는 근거가 못 된다는 판단이다.
 
+이름은 게임 안에서만 하나다 — 게임이 다르면 같은 이름의 모드가 여럿 있을 수
+있다(`Better Movements`). 그래서 이름으로 모드를 찾는 자리는 게임을 아는 만큼
+힌트로 받아 그 게임 것을 먼저 고른다(`read_mod(store, name, game=…)`,
+`_find_folder`). 힌트가 없으면 예전대로 먼저 잡히는 것을 쓴다. 힌트를 대는
+쪽은 설치본의 제목을 이미 읽는 `apply`·`remove`와, 게임을 인자로 받는
+`_lay_down`이고, 별칭은 `gameinfo.canon`이 같은 게임으로 본다.
+
 검증: `tests/test_import_standalone.py`, `tests/test_inject.py`
 
 보관소 폴더 이름은 카드의 `name`을 그대로 쓰지 않는다. `_safe`가 파일 시스템이

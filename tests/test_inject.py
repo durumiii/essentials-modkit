@@ -66,3 +66,29 @@ def test_wrong_game_blocks(tmp_path):
     (store / "Other Game").rename(store / "OtherDir")  # 폴더명은 무관, 카드의 game이 기준
     with pytest.raises(modstore.WrongGame):
         modstore.apply(store, "Alien Mod", game)
+
+
+def test_same_name_in_two_games_picks_this_game(tmp_path):
+    """게임마다 같은 이름의 모드가 있으면 이 게임 것이 잡힌다 — 사전순 첫 매치가 아니라."""
+    from modkit import modstore, rubyread
+
+    game = make_core_game(tmp_path)                        # Title=Old Game
+    other = make_core_game(tmp_path / "b")
+    (other / "Game.ini").write_text("[Game]\nTitle=Aaa Game\n", encoding="utf-8")
+    store = tmp_path / "store"
+    put_mod(store, "Better Movements", source=b"# for old\r\n", game="Old Game")
+    put_mod(store, "Better Movements", source=b"# for aaa\r\n", game="Aaa Game")
+
+    def injected(where):
+        return [zlib.decompress(bytes(e[2]))
+                for e in rubyread.loads((where / "Data/Scripts.rxdata").read_bytes())
+                if bytes(e[1]).startswith(b"MOD:Better Movements/")]
+
+    modstore.apply(store, "Better Movements", game)        # 사전순으로는 Aaa가 앞
+    assert injected(game) == [b"# for old\r\n"]
+    modstore.apply(store, "Better Movements", other)
+    assert injected(other) == [b"# for aaa\r\n"]
+
+    modstore.remove("Better Movements", game, store=store)  # 제거도 제 것을 본다
+    assert injected(game) == []
+    assert injected(other) == [b"# for aaa\r\n"]
