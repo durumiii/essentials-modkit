@@ -266,14 +266,10 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
     if not (game_dir / BUNDLE).is_file():
         # 플러그인 묶음이 없는 옛 엔진(포켓몬 Z처럼)의 스크립트 모드는 주입형이다 —
         # Scripts.rxdata에 섹션으로 덧붙인다. 규약은 poke-essentials 주입기와 한 벌.
-        # 주입은 늘 Main 앞에 일괄로 들어가므로 자리를 골라 꽂지 않는다. 모드 사이의
-        # 상대 순서는 걷어내고 다시 꽂는 재적용으로 실현되니, 상대가 아직 없으면 알린다.
-        for need in (card.get("order") or {}).get("after") or []:
-            if need not in others:
-                warnings.append(
-                    f"`{need}`가 아직 없어서 `{mod.name}`이 앞에 놓여요 — "
-                    f"`{need}`를 설치한 뒤 `{mod.name}`을 다시 설치하면 순서가 잡혀요")
+        # 주입은 늘 Main 앞에 일괄로 들어가므로 꽂을 때 자리를 고르지 않는다. 대신
+        # 꽂고 나서 전체를 선언대로 다시 늘어놓는다(`_rearrange_injections`).
         done = _inject(mod, game_dir)
+        warnings += _rearrange_injections(store, game_dir)
         done["warnings"] = warnings
         return done
     entries = _read(game_dir / BUNDLE)
@@ -295,6 +291,13 @@ def apply(store: Path | str, name: str, game_dir: Path | str, force: bool = Fals
         entries = list(entries)
         entries[at] = packed
         did = "덮어씀"
+
+    # 꽂을 자리는 `place`가 골랐지만, 그건 그때 있던 상대만 본 자리다. 나중에 들어온
+    # 상대에 맞춰 주입형과 같은 규칙으로 전체를 다시 늘어놓는다.
+    fresh, notes = declare.arrange([str(e[0]) for e in entries], store)
+    by_name = {str(e[0]): e for e in entries}
+    entries = [by_name[n] for n in fresh]
+    warnings += notes
 
     backup = _back_up(game_dir)
     _write(game_dir / BUNDLE, entries)
@@ -787,19 +790,10 @@ def _inject(mod: Mod, game_dir: Path) -> dict:
     )
     result = kept[:main_at] + fresh + kept[main_at:]
 
-    from . import rubywrite
-
-    payload = rubywrite.dumps(result)
-    again = rubyread.loads(payload)  # 쓰기 전에 왕복 확인 — 코어를 깨뜨리면 게임이 안 뜬다
-    if len(again) != len(result) or any(
-        bytes(a[1]) != bytes(b[1]) for a, b in zip(again, result)
-    ):
-        raise NoBundle("왕복 확인이 어긋났어요 — 코어를 건드리지 않았어요")
-
     backup = game_dir / SCRIPTS_BACKUP
     if not backup.exists():
         _put(backup, scripts_path.read_bytes())
-    _put(scripts_path, payload)
+    _put_core(scripts_path, result)
 
     brought = modassets.install(mod, game_dir)
     return {
@@ -809,6 +803,52 @@ def _inject(mod: Mod, game_dir: Path) -> dict:
         "backup": str(backup),
         "assets": len(brought["written"]) + len(brought["skipped"]),
     }
+
+
+def _put_core(scripts_path: Path, entries: list) -> None:
+    """코어 배열을 다시 적는다 — 쓰기 전에 되읽어 왕복을 확인한다.
+
+    코어를 깨뜨리면 게임이 아예 안 뜬다. 확인이 쓰기보다 먼저다.
+    """
+    from . import rubywrite
+
+    payload = rubywrite.dumps(entries)
+    again = rubyread.loads(payload)
+    if len(again) != len(entries) or any(
+        bytes(a[1]) != bytes(b[1]) for a, b in zip(again, entries)
+    ):
+        raise NoBundle("왕복 확인이 어긋났어요 — 코어를 건드리지 않았어요")
+    _put(scripts_path, payload)
+
+
+def _rearrange_injections(store, game_dir: Path) -> list:
+    """코어의 주입 섹션들을 선언 순서대로 다시 늘어놓는다 — 경고 목록을 준다.
+
+    주입은 늘 `Main` 앞 일괄로 들어가서, 얹는 시점에는 상대가 아직 없을 수 있다.
+    그래서 자리를 고르는 대신 설치가 끝난 뒤 전체를 한 번 다시 늘어놓는다 —
+    나중에 들어온 상대에 맞춰 그 자리에서 순서가 잡힌다.
+
+    모드 섹션이 있던 자리에 그대로 되꽂는 방식이라, 주입이 아닌 섹션(`Main` 등)은
+    한 칸도 움직이지 않는다.
+    """
+    from . import declare
+
+    names = _injected(game_dir)
+    fresh, notes = declare.arrange(names, store)
+    if fresh == names:
+        return notes
+    scripts_path = game_dir / SCRIPTS
+    entries = rubyread.loads(scripts_path.read_bytes())
+    spots, groups = [], {}
+    for i, entry in enumerate(entries):
+        title = bytes(entry[1]).decode("utf-8", "replace")
+        if title.startswith(MOD_MARK):
+            spots.append(i)
+            groups.setdefault(title[len(MOD_MARK):].split("/", 1)[0], []).append(entry)
+    for spot, entry in zip(spots, [e for n in fresh for e in groups[n]]):
+        entries[spot] = entry
+    _put_core(scripts_path, entries)
+    return notes
 
 
 def _uninject(mod: Mod, game_dir: Path) -> dict:
@@ -823,6 +863,9 @@ def _uninject(mod: Mod, game_dir: Path) -> dict:
     kept = [e for e in entries if not bytes(e[1]).startswith(prefix)]
     if len(kept) == len(entries):
         raise ModMissing(f"설치돼 있지 않아요: {mod.name}")
+    # 뺀 뒤에는 다시 늘어놓지 않는다 — 상대가 빠지면 제약이 느슨해질 뿐이라 남은
+    # 모드의 상대 순서는 여전히 선언을 만족한다. 이유 없이 흔들면 제거가 남의 모드
+    # 동작까지 바꾸는 셈이 된다.
     _put(scripts_path, rubywrite.dumps(kept))
 
     taken = modassets.remove(mod, game_dir)

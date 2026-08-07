@@ -51,16 +51,57 @@ def test_conflicts_blocks_with_reason(tmp_path):
 
 
 def test_order_after_places_later(tmp_path):
+    """상대가 나중에 들어와도 그 자리에서 순서가 잡힌다 — 사람이 다시 누르지 않는다."""
     from modkit import modstore
     game = make_core_game(tmp_path)
     store = tmp_path / "store"
     put_mod(store, "Base KR")
     put_mod(store, "Labels", extra={"order": {"after": ["Base KR"]}})
     modstore.apply(store, "Labels", game)      # Base KR가 아직 없어도 얹힌다 (제약은 상대)
-    modstore.apply(store, "Base KR", game)
-    modstore.apply(store, "Labels", game)      # 다시 얹으면 after 제약이 실현된다
+    assert modstore.installed(game) == ["Labels"]
+    modstore.apply(store, "Base KR", game)     # 상대가 들어오는 순간 재배치된다
+    assert modstore.installed(game) == ["Base KR", "Labels"]
+
+
+def test_reorder_keeps_undeclared_mods_in_place(tmp_path):
+    """선언 없는 모드끼리는 지금 순서 그대로 — 옛 모드의 동작이 바뀌면 안 된다."""
+    from modkit import modstore
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    for name in ("Mod A", "Mod B", "Mod C"):
+        put_mod(store, name)
+    put_mod(store, "Labels", extra={"order": {"after": ["Mod C"]}})
+    modstore.apply(store, "Labels", game)
+    for name in ("Mod A", "Mod B", "Mod C"):
+        modstore.apply(store, name, game)
+    assert modstore.installed(game) == ["Mod A", "Mod B", "Mod C", "Labels"]
+
+
+def test_reorder_in_bundle_when_counterpart_arrives_later(tmp_path):
+    """묶음형도 같은 규칙 — 나중에 들어온 상대에 맞춰 다시 늘어선다."""
+    from modkit import modstore
+    game = make_game(tmp_path)                 # 묶음에 "Base Mod"가 이미 있다
+    store = tmp_path / "store"
+    put_mod(store, "Late", game="Test Game", extra={"order": {"after": ["Extra"]}})
+    put_mod(store, "Extra", game="Test Game")
+    modstore.apply(store, "Late", game)
+    modstore.apply(store, "Extra", game)
     names = modstore.installed(game)
-    assert names.index("Base KR") < names.index("Labels")
+    assert names.index("Extra") < names.index("Late")
+    assert names.index("Base Mod") == 0        # 선언 없는 옛 항목은 자리를 지킨다
+
+
+def test_reorder_cycle_warns_and_keeps_current_order(tmp_path):
+    """제약이 순환이면 설치는 되돌리지 않고 지금 순서를 둔 채 알린다."""
+    from modkit import modstore
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "Ping", extra={"order": {"after": ["Pong"]}})
+    put_mod(store, "Pong", extra={"order": {"after": ["Ping"]}})
+    modstore.apply(store, "Ping", game)
+    r = modstore.apply(store, "Pong", game, force=True)
+    assert modstore.installed(game) == ["Ping", "Pong"]
+    assert any("순환" in w for w in r["warnings"])
 
 
 def test_order_before_inserts_ahead_in_bundle(tmp_path):
