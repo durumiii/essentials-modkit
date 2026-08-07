@@ -25,6 +25,8 @@ MODS = {
     "Better Movements": "Better-Movements",
     "Controller UX": "Controller-UX",
     "DPPT Font": "DPPT-Font",
+    "DPPT Font (갈무리 한글)": "DPPT-Font-Galmuri",
+    "DPPT Font (BW 한글)": "DPPT-Font-BW",
     "UI Text KR": "UI-Text-KR",
     "Z-GUI": "Z-GUI",
     "디버그 모드": "Debug-Mode",
