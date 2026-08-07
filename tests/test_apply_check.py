@@ -458,3 +458,39 @@ def test_never_installed_twin_does_not_block_revert(tmp_path):
     assert (game / "Graphics" / "look.png").read_bytes() == b"vanilla"  # 순정으로 돌아온다
     assert not r["warnings"]
     assert not (game / "modkit-owners.json").exists()                   # 장부도 비면 사라진다
+
+
+def put_identical_twins(tmp_path):
+    """내용이 바이트까지 같은 모드 둘 — 실기에서 배포용 합본과 그 재료 모드가 이 관계였다."""
+    import json
+    from tests.test_inject import make_core_game
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"original")
+    store = tmp_path / "store"
+    for name in ("KR Patch", "KR Patch Bundle"):
+        folder = store / "Old Game" / name
+        folder.mkdir(parents=True)
+        (folder / "look.png").write_bytes(b"same-bytes")
+        (folder / "mod.json").write_text(json.dumps(
+            {"name": name, "game": "Old Game", "scripts": [],
+             "assets": [{"file": "look.png", "install_to": "Graphics/look.png"}]}),
+            encoding="utf-8")
+    return game, store
+
+
+def test_identical_twin_is_not_reported_installed(tmp_path):
+    """같은 파일을 든 딴 모드를 '설치됨'으로 읽지 않는다 — 소유 장부가 주인을 안다."""
+    game, store = put_identical_twins(tmp_path)
+    modstore.apply(store, "KR Patch Bundle", game)
+    assert modstore.present(store, game, game="Old Game") == ["KR Patch Bundle"]
+
+
+def test_removing_identical_twin_says_who_owns_the_spot(tmp_path):
+    """설치한 적 없는 쌍둥이를 빼려 하면, 반쪽 타령 대신 지금 주인을 말한다."""
+    game, store = put_identical_twins(tmp_path)
+    modstore.apply(store, "KR Patch Bundle", game)
+    with pytest.raises(modstore.ModMissing) as err:
+        modstore.remove("KR Patch", game, store=store)
+    assert "KR Patch Bundle" in str(err.value)
+    assert (game / "Graphics" / "look.png").read_bytes() == b"same-bytes"

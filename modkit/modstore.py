@@ -95,6 +95,9 @@ def present(store: Path | str, game_dir: Path | str, game: str | None = None) ->
         found = []
     for mod in shelf(store, game=game):
         if mod.name not in found and not mod.scripts and mod.assets:
+            verdict = modassets.owner_verdict(mod, game_dir)
+            if verdict == "other":
+                continue          # 같은 파일을 든 딴 모드 — 장부가 주인을 안다
             matched, total = modassets.applied_ratio(mod, game_dir)
             if matched:  # 일부가 다른 모드에 덮였어도 이 모드는 게임에 있다
                 found.append(mod.name)
@@ -336,6 +339,13 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
 
     if told is not None and not told.scripts:
         # 파일만 갈아 끼우는 모드 — 묶음에 이름이 없으니 에셋으로 설치 여부를 가른다.
+        # 다만 **장부가 있으면 장부가 먼저다.** 같은 파일을 든 딴 모드(합본과 그 재료)는
+        # 파일 대조로 안 갈려서, 설치한 적 없는 쪽이 「반쪽」으로 거부되거나 그냥 지나갔다.
+        if modassets.owner_verdict(told, game_dir) == "other":
+            others = "·".join(f"`{one}`" for one in modassets.other_owners(told, game_dir))
+            raise ModMissing(
+                f"설치돼 있지 않아요: {name} — 그 자리는 지금 {others}의 것이에요. "
+                "파일이 같아도 넣은 모드가 다르면 다른 모드예요.")
         matched, total = modassets.applied_ratio(told, game_dir)
         stuck = modassets.unbacked_mismatches(told, game_dir)
         marked = modassets.any_backups(told, game_dir)

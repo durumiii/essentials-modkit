@@ -48,6 +48,36 @@ def declared(mod) -> tuple:
     )
 
 
+def owner_verdict(mod, game_dir: Path | str) -> str:
+    """소유 장부가 이 모드를 뭐라 하는가 — `"mine"` · `"other"` · `"unknown"`.
+
+    같은 파일을 든 모드 둘은 **파일 대조로 갈리지 않는다.** 배포용 합본과 그 재료 모드가
+    바로 그 사이라, 설치한 적 없는 쪽이 「설치됨」으로 읽히고 제거도 그대로 지나갔다
+    (2026-08-07 실기 — 게임 폴더의 자리 200곳을 합본이 쥐고 있는데 재료 모드가
+    「175/175 일치」로 뽑혔다). 장부는 설치가 적어 둔 것이라 이름으로 갈린다.
+
+    장부가 없는 옛 설치본은 `"unknown"`이다 — 그때는 예전처럼 파일 대조로 답한다.
+    """
+    game_dir = Path(game_dir).resolve()
+    book = _owners(game_dir)
+    if not book:
+        return "unknown"
+    spots = [where for _, where in declared(mod)]
+    known = [where for where in spots if where in book]
+    if not known:
+        return "unknown"          # 장부가 이 모드의 자리를 하나도 모른다 — 옛 설치본
+    return "mine" if any(mod.name in book[where] for where in known) else "other"
+
+
+def other_owners(mod, game_dir: Path | str) -> list:
+    """이 모드의 자리를 지금 쥐고 있는 다른 모드 이름들."""
+    book = _owners(Path(game_dir).resolve())
+    return sorted({owner
+                   for _, where in declared(mod)
+                   for owner in book.get(where, [])
+                   if owner != mod.name})
+
+
 def applied(mod, game_dir: Path | str) -> bool:
     """이 모드의 에셋이 지금 게임에 들어가 있는가.
 
@@ -55,6 +85,9 @@ def applied(mod, game_dir: Path | str) -> bool:
     # ponytail: 크기만 견준다 — 내용까지 읽으면 화면이 폴링할 때마다 수백 MB를 읽는다.
     # 크기가 같은 다른 내용에 속으면 그때 CRC 대조로 올린다.
     """
+    verdict = owner_verdict(mod, game_dir)
+    if verdict != "unknown":
+        return verdict == "mine"
     matched, total = applied_ratio(mod, game_dir)
     return total > 0 and matched == total
 
