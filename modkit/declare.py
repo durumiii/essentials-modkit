@@ -20,6 +20,19 @@ def _card(store, name):
     return json.loads((mod.folder / "mod.json").read_text(encoding="utf-8"))
 
 
+def _enemies(card: dict) -> dict:
+    """`conflicts`를 이름→까닭 사전으로 읽는다.
+
+    정본 꼴은 사전이지만 목록으로 적은 카드가 실제로 있었다(까닭 없이 이름만 아는
+    경우가 자연스럽다). 목록이 들어오면 죽는 대신 까닭 없는 사전으로 받는다 —
+    카드는 남이 손으로 적는 것이라, 꼴 하나 틀렸다고 도구가 터지면 안 된다.
+    """
+    said = card.get("conflicts") or {}
+    if isinstance(said, dict):
+        return said
+    return {str(one): "이 모드가 함께 쓰지 말라고 적어 두었어요." for one in said}
+
+
 def _provided(store, installed_names: list) -> set:
     """설치된 모드들이 `provides`로 선언한 능력의 합집합."""
     out = set()
@@ -46,12 +59,12 @@ def gate(mod_card: dict, installed_names: list, store) -> list:
                     f"`{need}`가 없는 채로 `{me}`를 얹었어요 — 이 모드가 기대하는 것이라 "
                     "일부가 조용히 안 돌 수 있어요(한글 글꼴이 없으면 글자가 네모로 "
                     f"떨어지는 식이에요). `{need}`를 설치한 뒤 `{me}`를 다시 설치하면 돼요.")
-    for enemy, why in (mod_card.get("conflicts") or {}).items():
+    for enemy, why in _enemies(mod_card).items():
         if enemy in installed_names:
             blocks.append(f"`{enemy}`와 공존할 수 없어요 — {why}")
     for other in installed_names:
         other_card = _card(store, other)
-        why = (other_card.get("conflicts") or {}).get(me)
+        why = _enemies(other_card).get(me)
         if why:
             blocks.append(f"`{other}`가 `{me}`를 거부해요 — {why}")
     if blocks:

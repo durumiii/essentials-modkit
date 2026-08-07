@@ -198,3 +198,19 @@ def test_core_swap_removal_keeps_later_injections(tmp_path):
     assert living == {"Inject A", "Inject B"}
     assert "Extra" not in titles          # 자기 것은 남김없이 빠졌다
     assert len(titles) == len(set(titles))  # 남의 층을 두 번 꽂지 않았다
+
+
+def test_conflicts_written_as_a_list_still_blocks(tmp_path):
+    """`conflicts`를 목록으로 적은 카드에도 도구가 죽지 않는다.
+
+    사전이 정본이지만 목록으로 적힌 카드가 실제로 있었다 — 그때 gate가
+    AttributeError로 터져 설치가 통째로 멎었다(2026-08-07 pokemon-z 합본).
+    """
+    from modkit import modstore, declare
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    put_mod(store, "Menu A")
+    put_mod(store, "Menu B", extra={"conflicts": ["Menu A"]})
+    modstore.apply(store, "Menu A", game)
+    with pytest.raises(declare.Blocked, match="Menu A"):
+        modstore.apply(store, "Menu B", game)
