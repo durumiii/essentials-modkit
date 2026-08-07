@@ -25,7 +25,7 @@ OUT = Path(__file__).resolve().parent / "dist" / "mods-z"
 # 받는 사람이 위에서부터 읽으면 되게 한다 — 한글패치가 먼저, 그 다음 글꼴(권하는 것부터),
 # 화면을 바꾸는 것, 마지막이 취향 모드다. 지문 파일은 `zz-`로 맨 끝에 선다.
 MODS = {
-    "한글패치 통합-Runa": "01-KR-Patch-Runa",
+    "한글패치 코어": "01-KR-Patch-Core",
     "Galmuri Font": "02-Galmuri-Font",
     "DPPT Font": "03-DPPT-Font",
     "BW Font": "04-BW-Font",
