@@ -118,3 +118,40 @@ def test_declared_order_softens_overlap_to_layer_note(tmp_path):
     layer = [w for w in r["warnings"] if "Mod A" in w and "위에" in w]
     assert len(layer) == 1                                            # 층 안내 한 줄
     assert "겹치는 자리 1곳" in layer[0]
+
+
+@pytest.mark.xfail(reason="코어 교체 모드를 빼면 그 뒤에 얹힌 주입 모드가 함께 사라진다 "
+                          "(2026-08-07 실기·샌드박스 재현). merge_core는 살아 있는 주입을 "
+                          "보존하게 돼 있는데 제거 경로에서 그렇게 되지 않는다 — 원인 미규명.",
+                   strict=True)
+def test_core_swap_removal_keeps_later_injections(tmp_path):
+    """코어를 통째로 덮는 모드를 뺄 때, 그 뒤에 얹힌 주입 모드는 살아남아야 한다."""
+    import io
+    import json
+    import zlib
+
+    from modkit import modstore, rubyread, rubywrite
+
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    swap = store / "Core Swap"
+    (swap / "Data").mkdir(parents=True)
+    core = rubyread.load(io.BytesIO((game / "Data/Scripts.rxdata").read_bytes()))
+    core.insert(0, [99, b"Extra", zlib.compress(b"# translated\r\n")])
+    (swap / "Data/Scripts.rxdata").write_bytes(rubywrite.dumps(core))
+    (swap / "mod.json").write_text(json.dumps(
+        {"name": "Core Swap", "game": "Old Game", "scripts": [],
+         "assets": [{"file": "Data/Scripts.rxdata", "install_to": "Data/Scripts.rxdata"}]},
+        ensure_ascii=False), encoding="utf-8")
+    put_mod(store, "Inject A", game="Old Game")
+    put_mod(store, "Inject B", game="Old Game")
+
+    modstore.apply(store, "Inject A", game)
+    modstore.apply(store, "Core Swap", game)
+    modstore.apply(store, "Inject B", game)      # 코어 교체 뒤에 얹은 주입
+    modstore.remove("Core Swap", game, store=store)
+
+    titles = [bytes(e[1]).decode("utf-8", "replace")
+              for e in rubyread.load(io.BytesIO((game / "Data/Scripts.rxdata").read_bytes()))]
+    living = {t.split("/")[0][4:] for t in titles if t.startswith("MOD:")}
+    assert living == {"Inject A", "Inject B"}
