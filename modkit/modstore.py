@@ -331,7 +331,7 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
         pass
     if told is not None and told.scripts and not (game_dir / BUNDLE).is_file():
         # 주입형 — 코어에서 이 모드의 섹션만 걷어 낸다. 다른 모드의 섹션은 그대로 선다.
-        return _uninject(told, game_dir)
+        return _uninject(told, game_dir, store)
 
     if told is not None and not told.scripts:
         # 파일만 갈아 끼우는 모드 — 묶음에 이름이 없으니 에셋으로 설치 여부를 가른다.
@@ -349,7 +349,7 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
                 f"`{name}`이 반쪽만 들어 있어요(파일 {matched}/{total} 일치) — 무엇이 "
                 "이 모드 것인지 백업이 없어 안전하게 못 빼요. 먼저 한 번 '설치'해서 "
                 "정식 상태로 만들면, 그다음 제거는 깨끗하게 돼요.")
-        taken = modassets.remove(told, game_dir)
+        taken = modassets.remove(told, game_dir, keep=_shared_slots(store, game_dir, told))
         return {
             "mod": name,
             "did": "제거됨",
@@ -851,7 +851,7 @@ def _rearrange_injections(store, game_dir: Path) -> list:
     return notes
 
 
-def _uninject(mod: Mod, game_dir: Path) -> dict:
+def _uninject(mod: Mod, game_dir: Path, store=None) -> dict:
     """코어에서 이 모드의 섹션만 걷어 낸다."""
     from . import rubywrite
 
@@ -868,7 +868,7 @@ def _uninject(mod: Mod, game_dir: Path) -> dict:
     # 동작까지 바꾸는 셈이 된다.
     _put(scripts_path, rubywrite.dumps(kept))
 
-    taken = modassets.remove(mod, game_dir)
+    taken = modassets.remove(mod, game_dir, keep=_shared_slots(store, game_dir, mod))
     return {
         "mod": mod.name,
         "did": "제거됨",
@@ -878,15 +878,28 @@ def _uninject(mod: Mod, game_dir: Path) -> dict:
     }
 
 
+def _shared_slots(store, game_dir: Path, mod) -> set:
+    """이 모드와 자리를 나눠 쓰는 **아직 설치된** 다른 모드의 자리들."""
+    store = Path(store or DEFAULT_STORE)
+    try:
+        here = set(present(store, game_dir, game=mod.game))
+    except Exception:
+        return set()          # 보관소를 못 읽으면 예전대로 — 없는 셈 친다
+    return {one.get("install_to")
+            for other in shelf(store, game=mod.game)
+            if other.name != mod.name and other.name in here
+            for one in (other.assets or [])}
+
+
 def _kept_note(taken: dict) -> list:
     """못 지운 자리 안내 — 순정이 있던 자리인데 되돌릴 백업이 없어 그대로 뒀다."""
     left = taken.get("kept") or []
     if not left:
         return []
     heads = ", ".join(left[:3]) + (f" 외 {len(left) - 3}개" if len(left) > 3 else "")
-    return [f"파일 {len(left)}개({heads})는 그대로 뒀어요 — 원래 게임에 있던 자리인데 "
-            "되돌릴 백업이 없어요(같은 자리를 쓰는 다른 모드가 먼저 빠지며 가져갔을 수 "
-            "있어요). 원본 배포물에서 그 파일만 덮어 주세요."]
+    return [f"파일 {len(left)}개({heads})는 그대로 뒀어요 — 다른 모드가 아직 쓰고 있거나, "
+            "원래 게임에 있던 자리인데 되돌릴 백업이 없어요. 순정으로 돌리려면 그 모드까지 "
+            "빼거나 원본 배포물에서 그 파일만 덮어 주세요."]
 
 
 _core_memo: dict = {}

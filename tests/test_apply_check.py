@@ -395,3 +395,38 @@ def test_remove_still_deletes_its_own_new_file(tmp_path):
     r = modstore.remove("Skin", game, store=store)
     assert not (game / "Graphics" / "look.png").exists()
     assert not r["warnings"]
+
+
+def test_removing_twin_keeps_the_other_mods_slot(tmp_path):
+    """같은 그림을 **바이트까지 같게** 들고 있는 두 모드 — 나중 것을 빼도 앞 모드가 산다.
+
+    내용이 같으면 설치가 층(.pre-)을 안 뜬다. 그래서 제거가 `.orig`(순정)로 떨어져
+    아직 설치돼 있는 앞 모드까지 순정으로 돌려놨다(2026-08-07 실기: 번역 모드가
+    170/175 반쪽이 돼 제거가 거부됐다).
+    """
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"vanilla")
+    store = tmp_path / "store"
+    put_asset_mod(store, "Old Game", crc=zlib.crc32(b"vanilla"))       # "Skin"
+    folder = store / "Old Game" / "Controller UX"                       # 같은 자리, 같은 바이트
+    folder.mkdir(parents=True)
+    (folder / "look.png").write_bytes(b"new-look")
+    (folder / "001_Mod.rb").write_bytes(b"def patched\r\nend\r\n")     # 실기처럼 스크립트도 있다
+    (folder / "mod.json").write_text(json.dumps(
+        {"name": "Controller UX", "game": "Old Game",
+         "scripts": [{"file": "001_Mod.rb", "script_name": "001_Mod.rb"}],
+         "assets": [{"file": "look.png", "install_to": "Graphics/look.png",
+                     "replaces_crc": zlib.crc32(b"vanilla")}]}, ensure_ascii=False),
+        encoding="utf-8")
+
+    modstore.apply(store, "Skin", game)
+    modstore.apply(store, "Controller UX", game)
+    r = modstore.remove("Controller UX", game, store=store)
+
+    assert (game / "Graphics" / "look.png").read_bytes() == b"new-look"  # Skin의 판이 산다
+    assert r["warnings"]
+    assert (game / "Graphics" / "look.png.orig").is_file()               # 백업은 Skin 몫으로 남는다
+
+    modstore.remove("Skin", game, store=store)                           # 마지막이 빠지면 순정
+    assert (game / "Graphics" / "look.png").read_bytes() == b"vanilla"

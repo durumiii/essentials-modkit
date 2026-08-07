@@ -195,8 +195,14 @@ def install(mod, game_dir: Path | str) -> dict:
     return {"written": written, "skipped": skipped, "backed_up": backed_up}
 
 
-def remove(mod, game_dir: Path | str) -> dict:
-    """넣었던 에셋을 걷어낸다. 덮었던 자리는 원본을 돌려놓는다."""
+def remove(mod, game_dir: Path | str, keep=()) -> dict:
+    """넣었던 에셋을 걷어낸다. 덮었던 자리는 원본을 돌려놓는다.
+
+    `keep`은 아직 설치돼 있는 다른 모드가 함께 쓰는 자리다. 그런 자리는 손대지 않는다 —
+    되돌리면 그 모드의 판까지 순정으로 떨어뜨린다(2026-08-07 실기: 번역 모드와
+    `Controller UX`가 같은 그림 다섯을 **바이트까지 같은 것으로** 들고 있어, 나중 설치가
+    「내용이 같다」로 층을 안 뜨고, 먼저 빠지면서 순정을 되돌려 번역 모드가 반쪽이 됐다).
+    """
     game_dir = Path(game_dir).resolve()
     removed, reverted, kept = [], [], []
     # 카드가 지문을 들고 있으면 그 자리에는 **원래 순정 파일이 있었다**. 백업이 없다고
@@ -219,6 +225,8 @@ def remove(mod, game_dir: Path | str) -> dict:
             _put(target, _restored(shelved.read_bytes(), target))
             shelved.unlink()
             reverted.append(where)
+        elif where in keep:
+            kept.append(where)   # 다른 모드가 아직 쓰는 자리 — 백업도 그 모드 몫으로 남긴다
         elif backup.is_file():
             _put(target, _restored(backup.read_bytes(), target))
             backup.unlink()
