@@ -358,3 +358,40 @@ def test_wholesale_core_remove_preserves_injected_mods(tmp_path):
 
     modstore.remove("KR Patch", game, store=store)
     assert "Speed Up" in modstore.installed(game)   # 원본 복원 후에도 주입은 남는다
+
+
+def test_remove_keeps_vanilla_slot_when_backup_is_gone(tmp_path):
+    """백업이 없어도 순정이 있던 자리(`replaces_crc`)는 안 지운다 — 안내만 낸다.
+
+    백업은 자리마다 하나뿐이라 그 자리를 함께 쓰는 다른 모드가 먼저 빠지면서
+    가져갈 수 있다. 그때 「백업이 없으니 내가 새로 놓은 것」으로 읽으면 순정이
+    사라진다(2026-08-07 실기 — helpCkey.png 등 다섯 장).
+    """
+    game = make_core_game(tmp_path)
+    (game / "Graphics").mkdir()
+    (game / "Graphics" / "look.png").write_bytes(b"vanilla")
+    store = tmp_path / "store"
+    put_asset_mod(store, "Old Game", crc=zlib.crc32(b"vanilla"))
+
+    modstore.apply(store, "Skin", game)
+    (game / "Graphics" / "look.png.orig").unlink()             # 남이 백업을 가져간 상태
+    r = modstore.remove("Skin", game, store=store)
+
+    assert (game / "Graphics" / "look.png").is_file()          # 순정 자리가 살아 있다
+    assert r["warnings"] and "Graphics/look.png" in r["warnings"][0]
+
+
+def test_remove_still_deletes_its_own_new_file(tmp_path):
+    """반대편 — 순정에 없던 자리(지문 없음)는 지금까지처럼 지운다."""
+    game = make_core_game(tmp_path)
+    store = tmp_path / "store"
+    folder = put_asset_mod(store, "Old Game", crc=0)
+    card = json.loads((folder / "mod.json").read_text(encoding="utf-8"))
+    del card["assets"][0]["replaces_crc"]                      # 새로 놓는 자리
+    (folder / "mod.json").write_text(json.dumps(card, ensure_ascii=False), encoding="utf-8")
+
+    modstore.apply(store, "Skin", game)
+    assert (game / "Graphics" / "look.png").is_file()
+    r = modstore.remove("Skin", game, store=store)
+    assert not (game / "Graphics" / "look.png").exists()
+    assert not r["warnings"]

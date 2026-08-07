@@ -198,7 +198,15 @@ def install(mod, game_dir: Path | str) -> dict:
 def remove(mod, game_dir: Path | str) -> dict:
     """넣었던 에셋을 걷어낸다. 덮었던 자리는 원본을 돌려놓는다."""
     game_dir = Path(game_dir).resolve()
-    removed, reverted = [], []
+    removed, reverted, kept = [], [], []
+    # 카드가 지문을 들고 있으면 그 자리에는 **원래 순정 파일이 있었다**. 백업이 없다고
+    # 「내가 새로 놓은 것」으로 단정해 지우면 순정이 사라진다 — 백업은 자리마다 하나뿐이라
+    # 그 자리를 함께 쓰는 다른 모드가 먼저 빠지면서 가져갔을 수 있다(2026-08-07 실기,
+    # helpCkey.png 등 다섯). # ponytail: 백업에 주인 이름이 없는 것이 뿌리 —
+    # 지문 없는 옛 카드는 여전히 못 지킨다. 필요해지면 `.orig`에 주인을 적는다.
+    was_vanilla = {one.get("install_to")
+                   for one in (getattr(mod, "assets", None) or [])
+                   if "replaces_crc" in one}
 
     for _, where in declared(mod):
         target = _inside(game_dir, where)
@@ -216,11 +224,14 @@ def remove(mod, game_dir: Path | str) -> dict:
             backup.unlink()
             reverted.append(where)
         elif target.is_file():
+            if where in was_vanilla:
+                kept.append(where)
+                continue
             target.unlink()
             removed.append(where)
             _sweep_empty(game_dir, target.parent)
 
-    return {"removed": removed, "reverted": reverted}
+    return {"removed": removed, "reverted": reverted, "kept": kept}
 
 
 def _restored(blob: bytes, target: Path) -> bytes:

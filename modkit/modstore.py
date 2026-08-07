@@ -352,6 +352,7 @@ def remove(name: str, game_dir: Path | str, store: Path | str | None = None) -> 
             "did": "제거됨",
             "total": 0,
             "assets": len(taken["removed"]) + len(taken["reverted"]),
+            "warnings": _kept_note(taken),
         }
 
     entries = _read(game_dir / BUNDLE)
@@ -830,7 +831,19 @@ def _uninject(mod: Mod, game_dir: Path) -> dict:
         "did": "제거됨",
         "total": len(kept),
         "assets": len(taken["removed"]) + len(taken["reverted"]),
+        "warnings": _kept_note(taken),
     }
+
+
+def _kept_note(taken: dict) -> list:
+    """못 지운 자리 안내 — 순정이 있던 자리인데 되돌릴 백업이 없어 그대로 뒀다."""
+    left = taken.get("kept") or []
+    if not left:
+        return []
+    heads = ", ".join(left[:3]) + (f" 외 {len(left) - 3}개" if len(left) > 3 else "")
+    return [f"파일 {len(left)}개({heads})는 그대로 뒀어요 — 원래 게임에 있던 자리인데 "
+            "되돌릴 백업이 없어요(같은 자리를 쓰는 다른 모드가 먼저 빠지며 가져갔을 수 "
+            "있어요). 원본 배포물에서 그 파일만 덮어 주세요."]
 
 
 _core_memo: dict = {}
