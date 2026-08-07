@@ -31,16 +31,21 @@ def _provided(store, installed_names: list) -> set:
 def gate(mod_card: dict, installed_names: list, store) -> list:
     """requires·conflicts를 검사하고, 통과하면 touches 겹침 경고 목록을 준다."""
     me = mod_card.get("name", "")
-    blocks = []
+    blocks, soft = [], []
     # requires는 모드 이름이거나 능력 이름이다 — 「한글 폰트를 제공하는 모드
     # 아무거나」를 이름으로는 적을 수 없다. 이름으로 먼저 보고, 없으면 설치된
     # 모드들의 provides에서 찾는다.
+    # 막지 않고 경고만 한다(소프트 블락) — 능력 이름의 표준 목록이 아직 없어,
+    # 철자 하나가 유저의 설치를 통째로 막는 쪽이 더 나쁘다는 판단(2026-08-07 유지자).
     unmet = [n for n in mod_card.get("requires") or [] if n not in installed_names]
     if unmet:
         provided = _provided(store, installed_names)
         for need in unmet:
             if need not in provided:
-                blocks.append(f"`{me}`에는 `{need}`가 먼저 필요해요")
+                soft.append(
+                    f"`{need}`가 없는 채로 `{me}`를 얹었어요 — 이 모드가 기대하는 것이라 "
+                    "일부가 조용히 안 돌 수 있어요(한글 글꼴이 없으면 글자가 네모로 "
+                    f"떨어지는 식이에요). `{need}`를 설치한 뒤 `{me}`를 다시 설치하면 돼요.")
     for enemy, why in (mod_card.get("conflicts") or {}).items():
         if enemy in installed_names:
             blocks.append(f"`{enemy}`와 공존할 수 없어요 — {why}")
@@ -56,7 +61,7 @@ def gate(mod_card: dict, installed_names: list, store) -> list:
     mine |= set((mod_card.get("touches") or {}).get("files") or [])
     my_order = set((mod_card.get("order") or {}).get("after") or ())
     my_order |= set((mod_card.get("order") or {}).get("before") or ())
-    warnings = []
+    warnings = soft
     for other in installed_names:
         if other == me:
             continue

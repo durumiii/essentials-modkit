@@ -153,14 +153,17 @@ def test_apply_and_remove_mod_round_trip(tmp_path):
 
 
 def test_apply_mod_blocked(tmp_path):
+    """공존 불가는 화면까지 차단으로 올라온다(requires는 이제 경고로 통과한다)."""
     api, store, state = make_api(tmp_path)
     game = make_core_game(tmp_path)
-    put_mod(store, "Needs Other", extra={"requires": ["Other"]})
+    put_mod(store, "Base")
+    put_mod(store, "Foe", extra={"conflicts": {"Base": "같은 씬을 통째로 갈아 끼움"}})
+    api.apply_mod(game, "Base")
 
-    r = api.apply_mod(game, "Needs Other")
+    r = api.apply_mod(game, "Foe")
     assert r["ok"] is False
     assert "blocked" in r
-    assert any("Other" in why for why in r["blocked"])
+    assert any("Base" in why for why in r["blocked"])
 
 
 def test_import_zip_installs_mod(tmp_path):

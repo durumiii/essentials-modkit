@@ -5,13 +5,16 @@ from tests.test_import_standalone import make_game
 from tests.test_inject import make_core_game, put_mod
 
 
-def test_requires_blocks(tmp_path):
-    from modkit import modstore, declare
+def test_requires_warns_but_installs(tmp_path):
+    """requires는 소프트 블락 — 막지 않고 무엇이 없어 무슨 일이 나는지 알린다."""
+    from modkit import modstore
     game = make_core_game(tmp_path)
     store = tmp_path / "store"
     put_mod(store, "Addon", extra={"requires": ["Base KR"]})
-    with pytest.raises(declare.Blocked, match="Base KR"):
-        modstore.apply(store, "Addon", game)
+    r = modstore.apply(store, "Addon", game)
+    assert "Addon" in modstore.installed(game)
+    said = [w for w in r["warnings"] if "Base KR" in w]
+    assert len(said) == 1 and "다시 설치하면" in said[0]
 
 
 def test_requires_accepts_capability(tmp_path):
@@ -22,19 +25,20 @@ def test_requires_accepts_capability(tmp_path):
     put_mod(store, "DPPT Font", extra={"provides": ["hangul-font"]})
     put_mod(store, "한글패치", extra={"requires": ["hangul-font"]})
     modstore.apply(store, "DPPT Font", game)
-    modstore.apply(store, "한글패치", game)                    # 이름이 달라도 능력으로 통과
+    r = modstore.apply(store, "한글패치", game)                # 이름이 달라도 능력으로 통과
     assert "한글패치" in modstore.installed(game)
+    assert not [w for w in r["warnings"] if "hangul-font" in w]   # 채워졌으면 조용하다
 
 
-def test_requires_capability_blocks_when_nobody_provides(tmp_path):
-    from modkit import modstore, declare
+def test_requires_capability_warns_when_nobody_provides(tmp_path):
+    from modkit import modstore
     game = make_core_game(tmp_path)
     store = tmp_path / "store"
     put_mod(store, "Some Font", extra={"provides": ["latin-font"]})
     put_mod(store, "한글패치", extra={"requires": ["hangul-font"]})
     modstore.apply(store, "Some Font", game)
-    with pytest.raises(declare.Blocked, match="hangul-font"):
-        modstore.apply(store, "한글패치", game)
+    r = modstore.apply(store, "한글패치", game)
+    assert any("hangul-font" in w for w in r["warnings"])
 
 
 def test_conflicts_blocks_with_reason(tmp_path):
